@@ -72,3 +72,17 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Env
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Misc
+.vscode/
+
+# Logs
+logs
+*.log
