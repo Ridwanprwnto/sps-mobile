@@ -1,13 +1,13 @@
 // src/constants/typography.js
 
 export const FontSize = {
-  xs: 11,
-  sm: 13,
-  md: 14,
-  base: 16,
-  lg: 18,
-  xl: 20,
-  '2xl': 22,
+  xs: 12,
+  sm: 14,
+  md: 16,
+  base: 18,
+  lg: 20,
+  xl: 22,
+  '2xl': 24,
   '3xl': 26,
   '4xl': 32,
 };

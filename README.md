@@ -1,79 +1,88 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# SPS Mobile (Sorting Pool System)
 
-# Getting Started
+Aplikasi **SPS Mobile (Sorting Pool System)** adalah aplikasi mobile berbasis Android yang dikembangkan menggunakan **React Native**. Aplikasi ini ditujukan untuk memfasilitasi petugas gudang/logistik (operator) dalam proses penyortiran barang (sortasi) berdasarkan nomor pick atau container.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+## 📱 Fitur Utama
 
-## Step 1: Start the Metro Server
+- **Autentikasi & Sesi Aman**: Login operator terenkripsi dengan manajemen sesi lokal (Token-based authentication).
+- **Dashboard Profil**: Tampilan sapaan pengguna, ID pengguna, dan grup/role secara dinamis.
+- **Proses Penyortiran (3 Fase)**:
+  1. **Cek Nomor Pick**: Validasi nomor pick/container ke server sebelum memulai proses pemindaian.
+  2. **Scan Item**: Antarmuka pemindaian barcode dengan fitur input manual, perhitungan progres (Scanned vs Total), dan tampilan *List Item* yang dikelompokkan ke dalam tab (Scanned, Pending, All).
+  3. **Penyortiran Selesai**: Ringkasan penyortiran jika semua barang pada nomor pick tersebut berhasil dipindai seluruhnya.
+- **Auto Focus & Swipe-to-Refresh**: Alur kerja yang intuitif (UX) dengan *auto-focus* pada kolom input scan dan dukungan *pull-to-refresh*.
+- **Native Splash Screen**: Transisi *Bootsplash* yang mulus dan modern menyesuaikan native OS (Android 12+ API).
+- **Multiple Environment**: Dukungan untuk konfigurasi *Local, Development, Test,* dan *Production* menggunakan file `.env`.
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+## 🛠 Teknologi & Library
 
-To start Metro, run the following command from the _root_ of your React Native project:
+Proyek ini dibangun di atas fondasi teknologi modern:
 
-```bash
-# using npm
-npm start
+- **Framework**: [React Native](https://reactnative.dev/) (v0.75.5) / React (v18.3.1)
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand) (Ringan, cepat, dan modern)
+- **Navigasi**: [React Navigation v6](https://reactnavigation.org/) (Native Stack)
+- **API Client**: [Axios](https://axios-http.com/)
+- **Penyimpanan Lokal**: [@react-native-async-storage/async-storage](https://react-native-async-storage.github.io/async-storage/)
+- **UI & Ikon**: 
+  - [React Native Paper](https://callstack.github.io/react-native-paper/)
+  - [@react-native-vector-icons/material-design-icons](https://github.com/oblador/react-native-vector-icons)
+- **Environment**: [react-native-config](https://github.com/lugg/react-native-config)
+- **Native Splash Screen**: [react-native-bootsplash](https://github.com/zoontek/react-native-bootsplash) (v7.3.2)
+- **Sistem File & Logging**: `react-native-fs`, `react-native-logs`
 
-# OR using Yarn
-yarn start
+## 📂 Struktur Direktori
+
+```text
+SPS/
+├── android/                   # Konfigurasi Native Android (Gradle, Manifest, Res, dll)
+├── assets/                    # Aset build seperti logo bootsplash generator
+├── src/                       # Source Code Utama React Native
+│   ├── assets/                # Gambar, logo, ikon (misal: src/assets/images)
+│   ├── components/            # Reusable UI Components (Button, Input, Snackbar, Loading)
+│   ├── constants/             # Konfigurasi Tema (Colors, Spacing, Typography)
+│   ├── navigation/            # Pengaturan Rute (AppStack, MainStack, AuthStack)
+│   ├── screens/               # Komponen Layar / Halaman
+│   │   ├── auth/              # Layar terkait Autentikasi (LoginScreen)
+│   │   └── main/              # Layar Utama
+│   │       ├── home/          # HomeScreen (Dashboard)
+│   │       └── sortingpool/   # SortingPoolScreen (Proses Scan & Sortasi)
+│   ├── services/              # Modul untuk memanggil REST API (Axios API interface)
+│   └── store/                 # State Management menggunakan Zustand (authStore, dll)
+├── App.js                     # Root Component
+├── index.js                   # Entry point React Native
+├── package.json               # Dependensi & NPM Scripts
+└── .env.*                     # Konfigurasi Environment API & Variabel Konstan
 ```
 
-## Step 2: Start your Application
+## 🚀 Panduan Menjalankan (Development)
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+2. **Pilih Environment** (Opsional, bawaan menggunakan `.env` yang disalin):
+   ```bash
+   npm run env:local
+   ```
+3. **Jalankan Metro Bundler**:
+   ```bash
+   npm start
+   ```
+4. **Jalankan di Emulator / Perangkat Android**:
+   ```bash
+   npm run android
+   ```
 
-### For Android
+## 📦 Build untuk Rilis (Production)
 
-```bash
-# using npm
-npm run android
-
-# OR using Yarn
-yarn android
-```
-
-### For iOS
-
-```bash
-# using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
-
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
-
-## Step 3: Modifying your App
-
-Now that you have successfully run the app, let's modify it.
-
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
-
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Untuk melakukan build APK rilis yang akan didistribusikan:
+1. Pastikan *signing config* dan *keystore* sudah diatur dengan benar di `android/app/build.gradle`.
+2. Bersihkan *build cache* (opsional tetapi disarankan):
+   ```bash
+   cd android && ./gradlew clean
+   ```
+3. Buat file APK Release:
+   ```bash
+   ./gradlew assembleRelease
+   ```
+4. File `.apk` akan dihasilkan di direktori `android/app/build/outputs/apk/release/app-release.apk`.

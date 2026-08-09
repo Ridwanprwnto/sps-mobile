@@ -84,7 +84,11 @@ const HomeScreen = ({ navigation }) => {
                             <Text style={styles.greeting}>{greeting()},</Text>
                             <Text style={styles.userName}>{(user?.username || "Operator").toUpperCase()}</Text>
                             <View style={styles.roleBadge}>
-                                <Icon name="shield-account" size={12} color={Colors.accentLight} />
+                                <Icon name="id-card" size={12} color={Colors.white} />
+                                <Text style={styles.roleText}>{user?.id || "Operator"}</Text>
+                            </View>
+                            <View style={styles.roleBadge}>
+                                <Icon name="shield-account" size={12} color={Colors.white} />
                                 <Text style={styles.roleText}>{user?.groupName || "Operator"}</Text>
                             </View>
                         </View>
@@ -195,7 +199,8 @@ const HomeScreen = ({ navigation }) => {
                 title="Keluar Aplikasi"
                 message="Apakah Anda yakin ingin keluar dari aplikasi SPS Mobile?"
                 confirmLabel="Ya, Keluar"
-                type="danger"
+                confirmVariant="primary"
+                type="warning"
                 isLoading={loggingOut}
             />
 
@@ -315,7 +320,7 @@ const styles = StyleSheet.create({
         fontWeight: FontWeight.extraBold,
     },
     summaryLabel: {
-        fontSize: 10,
+        fontSize: FontSize.xs,
         color: "rgba(255,255,255,0.8)",
         textAlign: "center",
         marginTop: 2,
