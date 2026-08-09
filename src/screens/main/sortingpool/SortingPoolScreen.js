@@ -235,8 +235,14 @@ const SortingPoolScreen = ({ navigation }) => {
     }, [previewData, initSorting]);
 
     const handleScan = useCallback(async () => {
-        const dusno = scanInput.trim();
+        let dusno = scanInput.trim();
         if (!dusno) return;
+
+        // Jika barcode yang di-scan memiliki 13 digit, hapus 1 karakter terakhir 
+        // agar cocok dengan format database (12 digit)
+        if (dusno.length === 13) {
+            dusno = dusno.slice(0, -1);
+        }
 
         setScanInput("");
         Keyboard.dismiss();
