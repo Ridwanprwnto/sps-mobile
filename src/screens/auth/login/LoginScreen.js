@@ -1,6 +1,18 @@
 // src/screens/auth/login/LoginScreen.js
 import React, { useState, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Animated, StatusBar, Image } from "react-native";
+import {
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    KeyboardAvoidingView,
+    Platform,
+    Animated,
+    StatusBar,
+    Image,
+} from "react-native";
+
+const logo = require('../../../assets/images/logo.png');
 import Icon from "@react-native-vector-icons/material-design-icons";
 import Config from "react-native-config";
 import { Button, Input, Snackbar } from "../../../components";
@@ -60,25 +72,35 @@ const LoginScreen = () => {
             <View style={styles.bgTop}>
                 <View style={styles.circle1} />
                 <View style={styles.circle2} />
-                <View style={styles.circle3} />
             </View>
 
-            <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-                <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <KeyboardAvoidingView
+                style={styles.flex}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}>
+                <ScrollView
+                    contentContainerStyle={styles.scroll}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}>
+
                     {/* Logo & Brand */}
                     <View style={styles.brandWrap}>
                         <View style={styles.logoBox}>
-                            <Image 
-                                source={require('../../../assets/images/logo.png')} 
-                                style={{ width: 184, height: 184, resizeMode: 'contain' }} 
+                            <Image
+                                source={logo}
+                                style={styles.logoImage}
+                                resizeMode="contain"
                             />
                         </View>
+                        <Text style={styles.appName}>SPS Mobile</Text>
+                        <Text style={styles.appTagline}>Sorting Pool System</Text>
                     </View>
 
                     {/* Card Form */}
                     <Animated.View style={[styles.card, { transform: [{ translateX: shakeAnim }] }]}>
                         <Text style={styles.cardTitle}>Selamat Datang</Text>
-                        <Text style={styles.cardSubtitle}>Masuk dengan akun Anda untuk mulai proses penyortiran container barang</Text>
+                        <Text style={styles.cardSubtitle}>
+                            Masuk dengan akun Anda untuk memulai proses penyortiran container barang.
+                        </Text>
 
                         <View style={styles.form}>
                             <Input
@@ -108,7 +130,7 @@ const LoginScreen = () => {
                                 error={fieldErrors.password}
                                 required
                             />
-                            
+
                             <Button
                                 title="Login"
                                 onPress={handleLogin}
@@ -116,17 +138,33 @@ const LoginScreen = () => {
                                 disabled={isLoading}
                                 fullWidth
                                 size="lg"
-                                style={{ marginTop: Spacing.sm }}
+                                iconRight="arrow-right"
+                                style={styles.loginBtn}
                             />
                         </View>
+
+                        {/* Info */}
+                        <View style={styles.infoRow}>
+                            <Icon name="shield-check" size={14} color={Colors.success} />
+                            <Text style={styles.infoText}>Koneksi terenkripsi & aman</Text>
+                        </View>
                     </Animated.View>
+
+                    {/* Version */}
+                    <Text style={styles.version}>v{Config.APP_VERSION}</Text>
+
+                    {/* Copyright */}
+                    <Text style={styles.copyright}>
+                        {Config.APP_COPYRIGHT} {Config.APP_DEVELOPER}
+                    </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
+
             <Snackbar
                 visible={snackbar.visible}
                 message={snackbar.message}
                 type={snackbar.type}
-                onDismiss={() => setSnackbar({ ...snackbar, visible: false })}
+                onDismiss={() => setSnackbar((p) => ({ ...p, visible: false }))}
             />
         </View>
     );
@@ -135,30 +173,26 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
     root: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.primary,
     },
-    flex: {
-        flex: 1,
-    },
+    flex: { flex: 1 },
     bgTop: {
         position: "absolute",
         top: 0,
         left: 0,
         right: 0,
-        height: 300,
+        height: "55%",
         backgroundColor: Colors.primary,
-        borderBottomLeftRadius: 40,
-        borderBottomRightRadius: 40,
         overflow: "hidden",
     },
     circle1: {
         position: "absolute",
-        width: 280,
-        height: 280,
-        borderRadius: 140,
+        width: 260,
+        height: 260,
+        borderRadius: 130,
         backgroundColor: Colors.primaryLight,
-        top: -90,
-        right: -70,
+        top: -80,
+        right: -60,
         opacity: 0.5,
     },
     circle2: {
@@ -171,16 +205,6 @@ const styles = StyleSheet.create({
         left: -70,
         opacity: 0.15,
     },
-    circle3: {
-        position: "absolute",
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: Colors.accentLight,
-        bottom: -20,
-        right: 40,
-        opacity: 0.1,
-    },
     scroll: {
         flexGrow: 1,
         justifyContent: "center",
@@ -192,15 +216,20 @@ const styles = StyleSheet.create({
         marginBottom: Spacing["2xl"],
     },
     logoBox: {
-        width: 160,
-        height: 160,
-        borderRadius: 24,
+        width: 110,
+        height: 110,
+        borderRadius: 26,
         backgroundColor: "rgba(255,255,255,0.15)",
         alignItems: "center",
         justifyContent: "center",
         marginBottom: Spacing.md,
         borderWidth: 1.5,
         borderColor: "rgba(255,255,255,0.3)",
+        overflow: "hidden",
+    },
+    logoImage: {
+        width: 110,
+        height: 110,
     },
     appName: {
         fontSize: FontSize["3xl"],
@@ -209,7 +238,7 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
     appTagline: {
-        fontSize: FontSize.sm,
+        fontSize: FontSize.md,
         color: "rgba(255,255,255,0.7)",
         marginTop: 4,
         letterSpacing: 0.5,
@@ -238,6 +267,33 @@ const styles = StyleSheet.create({
     },
     form: {
         gap: Spacing.md,
+    },
+    loginBtn: {
+        marginTop: Spacing.sm,
+        borderRadius: BorderRadius.lg,
+    },
+    infoRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        marginTop: Spacing.lg,
+        gap: 5,
+    },
+    infoText: {
+        fontSize: FontSize.xs,
+        color: Colors.textSecondary,
+    },
+    version: {
+        textAlign: "center",
+        fontSize: FontSize.xs,
+        color: "rgba(255,255,255,0.5)",
+        marginTop: Spacing.xl,
+    },
+    copyright: {
+        textAlign: "center",
+        fontSize: FontSize.xs,
+        color: "rgba(255,255,255,0.5)",
+        marginTop: Spacing.xs,
     },
 });
 

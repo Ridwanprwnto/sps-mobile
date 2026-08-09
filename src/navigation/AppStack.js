@@ -5,6 +5,8 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import useAuthStore from '../store/authStore';
 import BootSplash from 'react-native-bootsplash';
 
+import { LoadingView } from '../components';
+
 // Auth Screens
 import LoginScreen from '../screens/auth/login/LoginScreen';
 
@@ -32,14 +34,15 @@ const AppStack = () => {
 
   useEffect(() => {
     const initApp = async () => {
+      // Hide native bootsplash quickly to show React Native UI
+      await BootSplash.hide({ fade: true });
       await initialize();
-      BootSplash.hide({ fade: true });
     };
     initApp();
   }, [initialize]);
 
   if (isInitializing) {
-    return null; // The native splash screen is visible here
+    return <LoadingView message="Memuat aplikasi..." />;
   }
 
   return (

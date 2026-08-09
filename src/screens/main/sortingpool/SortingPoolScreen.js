@@ -1,6 +1,6 @@
 // src/screens/main/sortingpool/SortingPoolScreen.js
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, Animated, RefreshControl, TextInput, Keyboard } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, Animated, RefreshControl, TextInput, Keyboard, ScrollView } from "react-native";
 import Icon from "@react-native-vector-icons/material-design-icons";
 import { useAuthStore, useSortingStore } from "../../../store";
 import { Button, ConfirmDialog, Snackbar, EmptyState, LoadingView } from "../../../components";
@@ -21,7 +21,7 @@ const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartS
     };
 
     return (
-        <View style={styles.phaseInputWrap}>
+        <ScrollView contentContainerStyle={styles.phaseInputWrap} keyboardShouldPersistTaps="handled">
             <View style={styles.phaseInputCard}>
                 {/* Icon */}
                 <View style={styles.phaseInputIcon}>
@@ -108,7 +108,7 @@ const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartS
                     </View>
                 )}
             </View>
-        </View>
+        </ScrollView>
     );
 };
 
@@ -307,7 +307,12 @@ const SortingPoolScreen = ({ navigation }) => {
             await initSorting(nopick);
         }
         setRefreshing(false);
-    }, [nopick, initSorting]);
+        setTimeout(() => {
+            if (phase === "scanning") {
+                scanInputRef.current?.focus();
+            }
+        }, 400);
+    }, [nopick, initSorting, phase]);
 
     // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -386,16 +391,16 @@ const SortingPoolScreen = ({ navigation }) => {
                         </View>
                         <View style={{ marginTop: Spacing.sm, gap: 4 }}>
                             <Text style={styles.progressToko} numberOfLines={1}>
-                                <Icon name="store" size={12} color={Colors.textSecondary} /> {header.toko || header.NoToko || header.Toko || "-"} - {header.tokoname || header.TOK_NAME || "-"}
+                                <Icon name="store" size={14} color={Colors.textSecondary} /> {header.toko || header.NoToko || header.Toko || "-"} - {header.tokoname || header.TOK_NAME || "-"}
                             </Text>
                             <View style={{ flexDirection: "row", gap: Spacing.md }}>
                                 <Text style={styles.progressToko}>
-                                    <Icon name="door" size={12} color={Colors.textSecondary} />
+                                    <Icon name="door" size={14} color={Colors.textSecondary} />
                                     {" Gate: "}
                                     {header.gate || header.Gate || "-"}
                                 </Text>
                                 <Text style={styles.progressToko}>
-                                    <Icon name="calendar" size={12} color={Colors.textSecondary} />
+                                    <Icon name="calendar" size={14} color={Colors.textSecondary} />
                                     {" Pick: "}
                                     {header.tglpic || header.TglPic ? formatDate(header.tglpic || header.TglPic, "date") : "-"}
                                 </Text>
@@ -482,7 +487,7 @@ const SortingPoolScreen = ({ navigation }) => {
                     <View style={styles.completeSection}>
                         {!allScanned && (
                             <Text style={styles.completeHint}>
-                                <Icon name="information-outline" size={13} color={Colors.textSecondary} />
+                                <Icon name="information-outline" size={14} color={Colors.textSecondary} />
                                 {`  ${totalCount - scannedCount} container belum discan`}
                             </Text>
                         )}
@@ -502,7 +507,7 @@ const SortingPoolScreen = ({ navigation }) => {
 
             {/* ── Phase: Completed ── */}
             {phase === "completed" && (
-                <View style={styles.completedWrap}>
+                <ScrollView contentContainerStyle={styles.completedWrap} showsVerticalScrollIndicator={false}>
                     <View style={styles.completedCard}>
                         <View style={styles.completedIcon}>
                             <Icon name="check-circle" size={64} color={Colors.success} />
@@ -544,7 +549,7 @@ const SortingPoolScreen = ({ navigation }) => {
                             style={{ marginTop: Spacing.sm }}
                         />
                     </View>
-                </View>
+                </ScrollView>
             )}
 
             {/* ── Dialogs ── */}
@@ -616,7 +621,7 @@ const styles = StyleSheet.create({
         color: Colors.white,
     },
     headerSubtitle: {
-        fontSize: FontSize.xs,
+        fontSize: FontSize.sm,
         color: "rgba(255,255,255,0.7)",
         marginTop: 2,
     },
@@ -631,7 +636,7 @@ const styles = StyleSheet.create({
 
     // Phase Input
     phaseInputWrap: {
-        flex: 1,
+        flexGrow: 1,
         justifyContent: "center",
         padding: Spacing.lg,
     },
@@ -654,7 +659,7 @@ const styles = StyleSheet.create({
         borderColor: Colors.border,
     },
     phaseInputTitle: {
-        fontSize: FontSize["2xl"],
+        fontSize: FontSize.xl,
         fontWeight: FontWeight.bold,
         color: Colors.textPrimary,
         marginBottom: Spacing.xs,
@@ -679,7 +684,7 @@ const styles = StyleSheet.create({
     nopickInputIcon: { paddingHorizontal: Spacing.base },
     nopickInput: {
         flex: 1,
-        fontSize: FontSize.base,
+        fontSize: FontSize.md,
         color: Colors.textPrimary,
         paddingVertical: Spacing.md,
         letterSpacing: 1,
@@ -714,12 +719,12 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.sm,
     },
     progressLabel: {
-        fontSize: FontSize.sm,
+        fontSize: FontSize.md,
         fontWeight: FontWeight.semiBold,
         color: Colors.textPrimary,
     },
     progressDetail: {
-        fontSize: FontSize.xs,
+        fontSize: FontSize.sm,
         color: Colors.textSecondary,
         marginTop: 2,
     },
@@ -746,7 +751,7 @@ const styles = StyleSheet.create({
         borderRadius: 4,
     },
     progressToko: {
-        fontSize: FontSize.xs,
+        fontSize: FontSize.sm,
         color: Colors.textSecondary,
         marginTop: Spacing.xs,
     },
@@ -851,7 +856,7 @@ const styles = StyleSheet.create({
         gap: Spacing.xs,
     },
     completeHint: {
-        fontSize: FontSize.xs,
+        fontSize: FontSize.sm,
         color: Colors.textSecondary,
         textAlign: "center",
         marginBottom: Spacing.xs,
@@ -859,7 +864,7 @@ const styles = StyleSheet.create({
 
     // Completed Phase
     completedWrap: {
-        flex: 1,
+        flexGrow: 1,
         justifyContent: "center",
         padding: Spacing.lg,
     },
@@ -880,7 +885,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.lg,
     },
     completedTitle: {
-        fontSize: FontSize["2xl"],
+        fontSize: FontSize.xl,
         fontWeight: FontWeight.extraBold,
         color: Colors.textPrimary,
         marginBottom: Spacing.sm,
