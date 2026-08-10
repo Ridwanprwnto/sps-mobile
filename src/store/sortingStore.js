@@ -201,6 +201,34 @@ const useSortingStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Cari data nomor pick berdasarkan Tanggal Pick dan Nomor SP.
+   */
+  searchPreviewByTglAndSP: async (tglPic, noUrutSp) => {
+    if (!tglPic || !noUrutSp) {
+      return {success: false, message: 'Tanggal Pick dan Nomor SP tidak boleh kosong'};
+    }
+
+    set({isLoadingInit: true, error: null});
+    try {
+      const response = await sortingService.searchByTglAndSP(tglPic, noUrutSp);
+      
+      if (!response?.success || !response?.data || response.data.length === 0) {
+        const msg = `Data tidak ditemukan untuk Tanggal Pick ${tglPic} dan Nomor SP ${noUrutSp}`;
+        set({isLoadingInit: false, error: msg});
+        return {success: false, message: msg};
+      }
+
+      set({isLoadingInit: false});
+      return { success: true, data: response.data };
+    } catch (error) {
+      const message = parseError(error, 'Gagal memuat data berdasarkan Tanggal Pick dan Nomor SP');
+      log.error('[Sorting] searchPreviewByTglAndSP error:', error?.message || error);
+      set({isLoadingInit: false, error: message});
+      return {success: false, message};
+    }
+  },
+
   // ===========================================================================
   // STEP 2: SCAN CONTAINER
   // Scan nomor dusno → update flag Y → refresh sortingData
