@@ -7,8 +7,38 @@ import { Button, ConfirmDialog, Snackbar, EmptyState, LoadingView } from "../../
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from "../../../constants";
 import { calcProgress, getScanStatusConfig, formatDate } from "../../../utils";
 
+// ─── HELPER: Ekstraksi Nomor Pick dari Barcode Container ──────────────────────
+/**
+ * Barcode container memiliki format 13 digit angka:
+ *
+ *   [ PREFIX ][ NOPICK (running number) ][ SUFFIX ]
+ *
+ * @param {string} raw - input mentah dari user/scanner
+ * @returns {{ nopick: string, isFromBarcode: boolean, originalBarcode: string|null }}
+ */
+const extractNopickFromInput = (raw) => {
+    const trimmed = raw.trim();
+
+    // Cek apakah input adalah barcode container: tepat 13 digit angka
+    if (/^\d{13}$/.test(trimmed)) {
+        // ─── Konstanta format barcode ───────────────────────────────────────────
+        // PREFIX_LENGTH: jumlah digit prefix di depan (saat ini 2, update ke 1 saat nopick 8 digit)
+        // SUFFIX_LENGTH: jumlah digit suffix di belakang (selalu 4, nomor urut container)
+        const PREFIX_LENGTH = 2;
+        const SUFFIX_LENGTH = 4;
+
+        // Ekstrak nomor pick berdasarkan posisi: buang prefix awal & suffix akhir
+        const nopick = trimmed.slice(PREFIX_LENGTH, trimmed.length - SUFFIX_LENGTH);
+
+        return { nopick, isFromBarcode: true, originalBarcode: trimmed };
+    }
+
+    // Bukan barcode 13 digit → anggap langsung sebagai nomor pick
+    return { nopick: trimmed, isFromBarcode: false, originalBarcode: null };
+};
+
 // ─── PHASE: Input Nopick ──────────────────────────────────────────────────────
-const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartSorting, onCancelPreview }) => {
+const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartSorting, onCancelPreview, scannedBarcode }) => {
     const [nopick, setNopick] = useState("");
     const inputRef = useRef(null);
 
@@ -20,6 +50,13 @@ const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartS
         if (nopick.trim()) onSubmit(nopick.trim());
     };
 
+    // Deteksi real-time: apakah input saat ini adalah barcode container 13 digit
+    const { isFromBarcode: isBarcodeDetected, nopick: detectedNopick } = extractNopickFromInput(nopick);
+
+    // Warna dinamis input: hijau jika barcode terdeteksi, merah jika error, default jika biasa
+    const inputBorderColor = error ? Colors.error : isBarcodeDetected ? Colors.success : Colors.border;
+    const inputIconColor   = error ? Colors.error : isBarcodeDetected ? Colors.success : Colors.gray400;
+
     return (
         <ScrollView contentContainerStyle={styles.phaseInputWrap} keyboardShouldPersistTaps="handled">
             <View style={styles.phaseInputCard}>
@@ -28,22 +65,24 @@ const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartS
                     <Icon name="barcode-scan" size={44} color={Colors.primary} />
                 </View>
                 <Text style={styles.phaseInputTitle}>Cek Nomor Pick</Text>
-                <Text style={styles.phaseInputSubtitle}>Ketik atau scan nomor pick untuk memeriksa status proses penyortiran barang</Text>
+                <Text style={styles.phaseInputSubtitle}>
+                    Scan barcode container atau ketik nomor pick untuk memeriksa status proses penyortiran barang
+                </Text>
 
                 {/* Input Field */}
-                <View style={[styles.nopickInputWrap, error ? { borderColor: Colors.error } : { borderColor: Colors.border }]}>
-                    <Icon name="barcode" size={22} color={Colors.gray400} style={styles.nopickInputIcon} />
+                <View style={[styles.nopickInputWrap, { borderColor: inputBorderColor }, isBarcodeDetected && styles.nopickInputWrapBarcode]}>
+                    <Icon name="barcode" size={22} color={inputIconColor} style={styles.nopickInputIcon} />
                     <TextInput
                         ref={inputRef}
                         style={styles.nopickInput}
-                        placeholder="Nomor Pick"
+                        placeholder="No Pick / Barcode Container"
                         placeholderTextColor={Colors.gray300}
                         value={nopick}
                         onChangeText={(text) => {
                             setNopick(text);
                             if (previewData) onCancelPreview();
                         }}
-                        autoCapitalize="characters"
+                        keyboardType="numeric"
                         returnKeyType="done"
                         onSubmitEditing={handleSubmit}
                         editable={!isLoading}
@@ -170,6 +209,8 @@ const SortingPoolScreen = ({ navigation }) => {
     const [snackbar, setSnackbar] = useState({ visible: false, message: "", type: "info" });
     const [initError, setInitError] = useState(null);
     const [previewData, setPreviewData] = useState(null);
+    // Menyimpan barcode container asli jika user scan (untuk ditampilkan sebagai info)
+    const [scannedBarcodeInfo, setScannedBarcodeInfo] = useState(null);
 
     // Phase: 'input' | 'scanning' | 'completed'
     const phase = !nopick ? "input" : sortingData?.header?.status === "completed" && !forceScanning ? "completed" : "scanning";
@@ -203,21 +244,32 @@ const SortingPoolScreen = ({ navigation }) => {
     // ── Handlers ────────────────────────────────────────────────────────────────
 
     const handleInitSorting = useCallback(
-        async (inputNopick) => {
+        async (rawInput) => {
             setInitError(null);
-            const result = await checkPreviewNopick(inputNopick);
+
+            // Deteksi apakah input adalah barcode container 13 digit atau nomor pick langsung
+            const { nopick: extractedNopick, isFromBarcode, originalBarcode } = extractNopickFromInput(rawInput);
+
+            // Simpan info barcode untuk ditampilkan ke user (jika scan barcode)
+            setScannedBarcodeInfo(isFromBarcode ? originalBarcode : null);
+
+            const result = await checkPreviewNopick(extractedNopick);
             if (!result.success) {
-                setInitError(result.message);
+                setInitError(
+                    isFromBarcode
+                        ? `Barcode ${originalBarcode} → Nomor pick "${extractedNopick}" tidak ditemukan`
+                        : result.message,
+                );
             } else {
                 if (result.source === "wms") {
                     // Data sudah ada di WMS (proses pernah berjalan/selesai), langsung resume
-                    const initResult = await initSorting(inputNopick, result);
+                    const initResult = await initSorting(extractedNopick, result);
                     if (!initResult.success) {
                         setInitError(initResult.message);
                     }
                 } else {
                     // Data baru dari DPD, tampilkan preview konfirmasi
-                    setPreviewData({ nopick: inputNopick, ...result });
+                    setPreviewData({ nopick: extractedNopick, ...result });
                 }
             }
         },
@@ -372,7 +424,11 @@ const SortingPoolScreen = ({ navigation }) => {
                     onReset={() => setInitError(null)}
                     previewData={previewData}
                     onStartSorting={handleStartSorting}
-                    onCancelPreview={() => setPreviewData(null)}
+                    onCancelPreview={() => {
+                        setPreviewData(null);
+                        setScannedBarcodeInfo(null);
+                    }}
+                    scannedBarcode={scannedBarcodeInfo}
                 />
             )}
 
@@ -401,14 +457,14 @@ const SortingPoolScreen = ({ navigation }) => {
                             </Text>
                             <View style={{ flexDirection: "row", gap: Spacing.md }}>
                                 <Text style={styles.progressToko}>
-                                    <Icon name="door" size={14} color={Colors.textSecondary} />
-                                    {" Gate: "}
-                                    {header.gate || header.Gate || "-"}
-                                </Text>
-                                <Text style={styles.progressToko}>
                                     <Icon name="calendar" size={14} color={Colors.textSecondary} />
                                     {" Pick: "}
                                     {header.tglpic || header.TglPic ? formatDate(header.tglpic || header.TglPic, "date") : "-"}
+                                </Text>
+                                <Text style={styles.progressToko}>
+                                    <Icon name="door" size={14} color={Colors.textSecondary} />
+                                    {" Gate: "}
+                                    {header.gate || header.Gate || "-"}
                                 </Text>
                             </View>
                         </View>
