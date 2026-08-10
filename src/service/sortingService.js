@@ -27,6 +27,19 @@ const sortingService = {
     return response.data;
   },
 
+  /**
+   * Mencari daftar nomor pick berdasarkan Tanggal Pick dan Nomor SP dari Backend 1
+   * @param {string} tglPic - Tanggal (YYYY-MM-DD)
+   * @param {string} noUrutSp - Nomor SP
+   */
+  async searchByTglAndSP(tglPic, noUrutSp) {
+    const response = await dpdApi.post(`${DPD_PREFIX}/sortingpool/search-by-sp`, {
+      tglPic,
+      noUrutSp,
+    });
+    return response.data;
+  },
+
   // ===========================================================================
   // BACKEND 2 (WMS) — CRUD sorting pool
   // ===========================================================================

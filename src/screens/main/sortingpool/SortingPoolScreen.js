@@ -3,9 +3,10 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, Animated, RefreshControl, TextInput, Keyboard, ScrollView } from "react-native";
 import Icon from "@react-native-vector-icons/material-design-icons";
 import { useAuthStore, useSortingStore } from "../../../store";
-import { Button, ConfirmDialog, Snackbar, EmptyState, LoadingView } from "../../../components";
+import { Button, ConfirmDialog, Snackbar, EmptyState, LoadingView, AppModal } from "../../../components";
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from "../../../constants";
 import { calcProgress, getScanStatusConfig, formatDate } from "../../../utils";
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
 // ─── HELPER: Ekstraksi Nomor Pick dari Barcode Container ──────────────────────
 /**
@@ -37,58 +38,100 @@ const extractNopickFromInput = (raw) => {
     return { nopick: trimmed, isFromBarcode: false, originalBarcode: null };
 };
 
-// ─── PHASE: Input Nopick ──────────────────────────────────────────────────────
-const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartSorting, onCancelPreview, scannedBarcode }) => {
-    const [nopick, setNopick] = useState("");
+// ─── PHASE: Input Tgl & SP ──────────────────────────────────────────────────────
+const getTodayFormatted = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const PhaseInput = ({ onSearch, isLoading, error, onReset, previewData, onStartSorting, onCancelPreview }) => {
+    const [tglPic, setTglPic] = useState(getTodayFormatted());
+    const [noUrutSp, setNoUrutSp] = useState("");
+    const [dateObj, setDateObj] = useState(new Date());
+
     const inputRef = useRef(null);
 
-    useEffect(() => {
-        setTimeout(() => inputRef.current?.focus(), 300);
-    }, []);
-
-    const handleSubmit = () => {
-        if (nopick.trim()) onSubmit(nopick.trim());
+    const handleSearch = () => {
+        if (tglPic.trim() && noUrutSp.trim()) {
+            onSearch(tglPic.trim(), noUrutSp.trim());
+        }
     };
 
-    // Deteksi real-time: apakah input saat ini adalah barcode container 13 digit
-    const { isFromBarcode: isBarcodeDetected, nopick: detectedNopick } = extractNopickFromInput(nopick);
+    const openDatePicker = () => {
+        if (isLoading) return;
+        DateTimePickerAndroid.open({
+            value: dateObj,
+            mode: 'date',
+            onChange: (event, selectedDate) => {
+                if (event.type === 'set' && selectedDate) {
+                    setDateObj(selectedDate);
+                    // Format YYYY-MM-DD
+                    const year = selectedDate.getFullYear();
+                    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(selectedDate.getDate()).padStart(2, '0');
+                    setTglPic(`${year}-${month}-${day}`);
+                    if (previewData) onCancelPreview();
+                }
+            },
+        });
+    };
 
-    // Warna dinamis input: hijau jika barcode terdeteksi, merah jika error, default jika biasa
-    const inputBorderColor = error ? Colors.error : isBarcodeDetected ? Colors.success : Colors.border;
-    const inputIconColor   = error ? Colors.error : isBarcodeDetected ? Colors.success : Colors.gray400;
+    const inputBorderColor = error ? Colors.error : Colors.border;
+    const inputIconColor = error ? Colors.error : Colors.gray400;
 
     return (
         <ScrollView contentContainerStyle={styles.phaseInputWrap} keyboardShouldPersistTaps="handled">
             <View style={styles.phaseInputCard}>
                 {/* Icon */}
                 <View style={styles.phaseInputIcon}>
-                    <Icon name="barcode-scan" size={44} color={Colors.primary} />
+                    <Icon name="magnify" size={44} color={Colors.primary} />
                 </View>
-                <Text style={styles.phaseInputTitle}>Cek Nomor Pick</Text>
+                <Text style={styles.phaseInputTitle}>Cari Data Pick</Text>
                 <Text style={styles.phaseInputSubtitle}>
-                    Scan barcode container atau ketik nomor pick untuk memeriksa status proses penyortiran barang
+                    Masukkan Tanggal Pick dan Nomor SP untuk memeriksa status proses penyortiran barang
                 </Text>
 
-                {/* Input Field */}
-                <View style={[styles.nopickInputWrap, { borderColor: inputBorderColor }, isBarcodeDetected && styles.nopickInputWrapBarcode]}>
-                    <Icon name="barcode" size={22} color={inputIconColor} style={styles.nopickInputIcon} />
+                {/* Input Field Tanggal */}
+                <TouchableOpacity 
+                    style={[styles.nopickInputWrap, { borderColor: inputBorderColor }]}
+                    onPress={openDatePicker}
+                    activeOpacity={0.7}
+                >
+                    <Icon name="calendar" size={22} color={inputIconColor} style={styles.nopickInputIcon} />
+                    <View style={styles.nopickInput}>
+                        <Text style={{ color: tglPic ? Colors.textPrimary : Colors.gray300, fontSize: FontSize.md }}>
+                            {tglPic || "Tanggal Pick (YYYY-MM-DD)"}
+                        </Text>
+                    </View>
+                    {tglPic.length > 0 && (
+                        <TouchableOpacity onPress={() => setTglPic("")} style={styles.clearBtn} disabled={isLoading}>
+                            <Icon name="close-circle" size={18} color={Colors.gray300} />
+                        </TouchableOpacity>
+                    )}
+                </TouchableOpacity>
+
+                {/* Input Field Nomor SP */}
+                <View style={[styles.nopickInputWrap, { borderColor: inputBorderColor }]}>
+                    <Icon name="format-list-numbered" size={22} color={inputIconColor} style={styles.nopickInputIcon} />
                     <TextInput
-                        ref={inputRef}
                         style={styles.nopickInput}
-                        placeholder="No Pick / Barcode Container"
+                        placeholder="Nomor SP"
                         placeholderTextColor={Colors.gray300}
-                        value={nopick}
+                        value={noUrutSp}
                         onChangeText={(text) => {
-                            setNopick(text);
+                            setNoUrutSp(text);
                             if (previewData) onCancelPreview();
                         }}
-                        keyboardType="numeric"
+                        keyboardType="default"
                         returnKeyType="done"
-                        onSubmitEditing={handleSubmit}
+                        onSubmitEditing={handleSearch}
                         editable={!isLoading}
                     />
-                    {nopick.length > 0 && (
-                        <TouchableOpacity onPress={() => setNopick("")} style={styles.clearBtn}>
+                    {noUrutSp.length > 0 && (
+                        <TouchableOpacity onPress={() => setNoUrutSp("")} style={styles.clearBtn}>
                             <Icon name="close-circle" size={18} color={Colors.gray300} />
                         </TouchableOpacity>
                     )}
@@ -102,10 +145,10 @@ const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartS
                 )}
 
                 <Button
-                    title={isLoading ? "Memuat..." : "Cari"}
-                    onPress={handleSubmit}
+                    title={isLoading ? "Mencari..." : "Cari"}
+                    onPress={handleSearch}
                     loading={isLoading}
-                    disabled={!nopick.trim() || isLoading || !!previewData}
+                    disabled={!tglPic.trim() || !noUrutSp.trim() || isLoading || !!previewData}
                     fullWidth
                     size="lg"
                     iconRight={isLoading ? undefined : "arrow-right"}
@@ -115,6 +158,10 @@ const PhaseInput = ({ onSubmit, isLoading, error, onReset, previewData, onStartS
                 {previewData && previewData.data && previewData.data.header && (
                     <View style={{ width: "100%", marginTop: Spacing.xl, paddingTop: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border, gap: Spacing.sm }}>
                         <Text style={{ fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.xs }}>Data Ditemukan</Text>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ color: Colors.textSecondary }}>Nomor Pick</Text>
+                            <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{previewData.nopick || "-"}</Text>
+                        </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                             <Text style={{ color: Colors.textSecondary }}>Kode Toko</Text>
                             <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{previewData.data.header.Toko || "-"}</Text>
@@ -198,7 +245,7 @@ const ContainerItem = ({ item, index }) => {
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const SortingPoolScreen = ({ navigation }) => {
     const { user } = useAuthStore();
-    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, error, initSorting, checkPreviewNopick, scanContainer, completeProcess, resetSorting, resetError } = useSortingStore();
+    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, error, initSorting, checkPreviewNopick, scanContainer, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP } = useSortingStore();
 
     const [forceScanning, setForceScanning] = useState(false);
     const [filterTab, setFilterTab] = useState("all");
@@ -209,8 +256,10 @@ const SortingPoolScreen = ({ navigation }) => {
     const [snackbar, setSnackbar] = useState({ visible: false, message: "", type: "info" });
     const [initError, setInitError] = useState(null);
     const [previewData, setPreviewData] = useState(null);
-    // Menyimpan barcode container asli jika user scan (untuk ditampilkan sebagai info)
-    const [scannedBarcodeInfo, setScannedBarcodeInfo] = useState(null);
+    
+    // State untuk AppModal Pick List
+    const [pickListModalVisible, setPickListModalVisible] = useState(false);
+    const [pickListData, setPickListData] = useState([]);
 
     // Phase: 'input' | 'scanning' | 'completed'
     const phase = !nopick ? "input" : sortingData?.header?.status === "completed" && !forceScanning ? "completed" : "scanning";
@@ -243,37 +292,50 @@ const SortingPoolScreen = ({ navigation }) => {
 
     // ── Handlers ────────────────────────────────────────────────────────────────
 
-    const handleInitSorting = useCallback(
-        async (rawInput) => {
+    const handleSearchByTglAndSP = useCallback(
+        async (tglPic, noUrutSp) => {
+            setInitError(null);
+            
+            const result = await searchPreviewByTglAndSP(tglPic, noUrutSp);
+            
+            if (!result.success) {
+                setInitError(result.message);
+            } else {
+                if (result.data && result.data.length > 0) {
+                    // Debug: log struktur data item pertama untuk verifikasi field name
+                    console.log('[SortingPool] searchByTglAndSP item[0]:', JSON.stringify(result.data[0]));
+                    setPickListData(result.data);
+                    setPickListModalVisible(true);
+                } else {
+                    setInitError("Data pick tidak ditemukan");
+                }
+            }
+        },
+        [searchPreviewByTglAndSP]
+    );
+
+    const handleSelectPickNumber = useCallback(
+        async (selectedNopick) => {
+            setPickListModalVisible(false);
             setInitError(null);
 
-            // Deteksi apakah input adalah barcode container 13 digit atau nomor pick langsung
-            const { nopick: extractedNopick, isFromBarcode, originalBarcode } = extractNopickFromInput(rawInput);
-
-            // Simpan info barcode untuk ditampilkan ke user (jika scan barcode)
-            setScannedBarcodeInfo(isFromBarcode ? originalBarcode : null);
-
-            const result = await checkPreviewNopick(extractedNopick);
+            const result = await checkPreviewNopick(selectedNopick);
             if (!result.success) {
-                setInitError(
-                    isFromBarcode
-                        ? `Barcode ${originalBarcode} → Nomor pick "${extractedNopick}" tidak ditemukan`
-                        : result.message,
-                );
+                setInitError(result.message);
             } else {
                 if (result.source === "wms") {
-                    // Data sudah ada di WMS (proses pernah berjalan/selesai), langsung resume
-                    const initResult = await initSorting(extractedNopick, result);
+                    // Data sudah ada di WMS, langsung resume
+                    const initResult = await initSorting(selectedNopick, result);
                     if (!initResult.success) {
                         setInitError(initResult.message);
                     }
                 } else {
                     // Data baru dari DPD, tampilkan preview konfirmasi
-                    setPreviewData({ nopick: extractedNopick, ...result });
+                    setPreviewData({ nopick: selectedNopick, ...result });
                 }
             }
         },
-        [checkPreviewNopick, initSorting],
+        [checkPreviewNopick, initSorting]
     );
 
     const handleStartSorting = useCallback(async () => {
@@ -418,7 +480,7 @@ const SortingPoolScreen = ({ navigation }) => {
             {/* ── Phase: Input ── */}
             {phase === "input" && (
                 <PhaseInput
-                    onSubmit={handleInitSorting}
+                    onSearch={handleSearchByTglAndSP}
                     isLoading={isLoadingInit}
                     error={initError}
                     onReset={() => setInitError(null)}
@@ -426,9 +488,7 @@ const SortingPoolScreen = ({ navigation }) => {
                     onStartSorting={handleStartSorting}
                     onCancelPreview={() => {
                         setPreviewData(null);
-                        setScannedBarcodeInfo(null);
                     }}
-                    scannedBarcode={scannedBarcodeInfo}
                 />
             )}
 
@@ -641,6 +701,53 @@ const SortingPoolScreen = ({ navigation }) => {
                 confirmVariant="primary"
                 type="warning"
             />
+
+            <AppModal
+                visible={pickListModalVisible}
+                onClose={() => setPickListModalVisible(false)}
+                title="Pilih Nomor Pick"
+                size="md"
+                scrollable
+            >
+                {pickListData.map((item, index) => {
+                    const pickNumber = 
+                        item.nopick;
+                    
+                    const tokoCode = item.Toko || '-';
+                    const tokoName = item.TOK_NAME || '-';
+                    
+                    return (
+                        <TouchableOpacity
+                            key={index}
+                            style={{
+                                padding: Spacing.md,
+                                borderBottomWidth: 1,
+                                borderBottomColor: Colors.border,
+                                backgroundColor: Colors.white,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                opacity: pickNumber ? 1 : 0.4,
+                            }}
+                            onPress={() => {
+                                if (!pickNumber) {
+                                    console.warn('[SortingPool] pickNumber undefined, item keys:', Object.keys(item));
+                                    return;
+                                }
+                                handleSelectPickNumber(String(pickNumber));
+                            }}
+                        >
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary }}>
+                                    {pickNumber || '(nomor pick tidak dikenali)'}
+                                </Text>
+                                <Text style={{ fontSize: FontSize.sm, color: Colors.textSecondary }}>{tokoCode} - {tokoName}</Text>
+                            </View>
+                            <Icon name="chevron-right" size={24} color={Colors.gray400} />
+                        </TouchableOpacity>
+                    );
+                })}
+            </AppModal>
 
             <Snackbar
                 visible={snackbar.visible}
