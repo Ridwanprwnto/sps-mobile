@@ -159,8 +159,16 @@ const PhaseInput = ({ onSearch, isLoading, error, onReset, previewData, onStartS
                     <View style={{ width: "100%", marginTop: Spacing.xl, paddingTop: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border, gap: Spacing.sm }}>
                         <Text style={{ fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.xs }}>Data Ditemukan</Text>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ color: Colors.textSecondary }}>Nomor SP</Text>
+                            <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{previewData.data.header.NO_URUTSP || "-"}</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                             <Text style={{ color: Colors.textSecondary }}>Nomor Pick</Text>
                             <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{previewData.nopick || "-"}</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ color: Colors.textSecondary }}>Tanggal Pick</Text>
+                            <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{formatDate(previewData.data.header.TglPic)}</Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                             <Text style={{ color: Colors.textSecondary }}>Kode Toko</Text>
@@ -171,20 +179,21 @@ const PhaseInput = ({ onSearch, isLoading, error, onReset, previewData, onStartS
                             <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold, textAlign: "right", flex: 1, marginLeft: 10 }}>{previewData.data.header.TOK_NAME || "-"}</Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                            <Text style={{ color: Colors.textSecondary }}>Tanggal Pick</Text>
-                            <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{formatDate(previewData.data.header.TglPic)}</Text>
-                        </View>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                             <Text style={{ color: Colors.textSecondary }}>Gate</Text>
                             <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{previewData.data.header.Gate || "-"}</Text>
-                        </View>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                            <Text style={{ color: Colors.textSecondary }}>Nomor SP</Text>
-                            <Text style={{ color: Colors.textPrimary, fontWeight: FontWeight.semiBold }}>{previewData.data.header.NO_URUTSP || "-"}</Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: Spacing.xs, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border }}>
                             <Text style={{ color: Colors.textSecondary }}>Total Container</Text>
                             <Text style={{ color: Colors.primary, fontWeight: FontWeight.bold }}>{previewData.data.details ? previewData.data.details.length : 0}</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ color: Colors.textSecondary }}>Jumlah Container Terpakai</Text>
+                            <Text style={{ 
+                                color: (previewData.data.header.fscanfraction === 1 || previewData.data.header.fscanfraction === true) ? Colors.success : Colors.warning, 
+                                fontWeight: FontWeight.semiBold 
+                            }}>
+                                {(previewData.data.header.fscanfraction === 1 || previewData.data.header.fscanfraction === true) ? "Finish" : "On Process"}
+                            </Text>
                         </View>
 
                         <View style={{ flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.md }}>
@@ -245,7 +254,7 @@ const ContainerItem = ({ item, index }) => {
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const SortingPoolScreen = ({ navigation }) => {
     const { user } = useAuthStore();
-    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, error, initSorting, checkPreviewNopick, scanContainer, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP } = useSortingStore();
+    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, isSyncing, error, initSorting, checkPreviewNopick, scanContainer, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP, syncContainers } = useSortingStore();
 
     const [forceScanning, setForceScanning] = useState(false);
     const [filterTab, setFilterTab] = useState("all");
@@ -434,6 +443,23 @@ const SortingPoolScreen = ({ navigation }) => {
         }, 400);
     }, [nopick, initSorting, phase]);
 
+    const handleSyncContainers = useCallback(async () => {
+        const result = await syncContainers();
+        if (result.success) {
+            setSnackbar({
+                visible: true,
+                message: result.message,
+                type: "success",
+            });
+        } else {
+            setSnackbar({
+                visible: true,
+                message: result.message || "Gagal memperbarui data container",
+                type: "error",
+            });
+        }
+    }, [syncContainers]);
+
     // ── Render ──────────────────────────────────────────────────────────────────
 
     // Loading full-screen (hanya muncul jika bukan di phase input)
@@ -511,22 +537,52 @@ const SortingPoolScreen = ({ navigation }) => {
                         <View style={styles.progressBarBg}>
                             <Animated.View style={[styles.progressBarFill, { width: `${progress}%` }, allScanned && { backgroundColor: Colors.success }]} />
                         </View>
-                        <View style={{ marginTop: Spacing.sm, gap: 4 }}>
-                            <Text style={styles.progressToko} numberOfLines={1}>
-                                <Icon name="store" size={14} color={Colors.textSecondary} /> {header.toko || header.NoToko || header.Toko || "-"} - {header.tokoname || header.TOK_NAME || "-"}
-                            </Text>
-                            <View style={{ flexDirection: "row", gap: Spacing.md }}>
-                                <Text style={styles.progressToko}>
-                                    <Icon name="calendar" size={14} color={Colors.textSecondary} />
-                                    {" Pick: "}
-                                    {header.tglpic || header.TglPic ? formatDate(header.tglpic || header.TglPic, "date") : "-"}
+                        
+                        {/* Detail Header Info */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: Spacing.sm }}>
+                            <View style={{ flex: 1, gap: 4 }}>
+                                <Text style={styles.progressToko} numberOfLines={1}>
+                                    <Icon name="store" size={14} color={Colors.textSecondary} /> {header.toko || header.NoToko || header.Toko || "-"} - {header.tokoname || header.TOK_NAME || "-"}
                                 </Text>
-                                <Text style={styles.progressToko}>
-                                    <Icon name="door" size={14} color={Colors.textSecondary} />
-                                    {" Gate: "}
-                                    {header.gate || header.Gate || "-"}
+                                <View style={{ flexDirection: "row", gap: Spacing.md }}>
+                                    <Text style={styles.progressToko}>
+                                        <Icon name="calendar" size={14} color={Colors.textSecondary} />
+                                        {" Pick: "}
+                                        {header.tglpic || header.TglPic ? formatDate(header.tglpic || header.TglPic, "date") : "-"}
+                                    </Text>
+                                    <Text style={styles.progressToko}>
+                                        <Icon name="door" size={14} color={Colors.textSecondary} />
+                                        {" Gate: "}
+                                        {header.gate || header.Gate || "-"}
+                                    </Text>
+                                </View>
+                                <Text style={styles.progressToko} numberOfLines={1}>
+                                    <Icon name="progress-check" size={14} color={Colors.textSecondary} />
+                                    {" Jumlah Container Terpakai: "}
+                                    <Text style={{ 
+                                        color: (header.fscanfraction === 1 || header.fscanfraction === true) ? Colors.success : Colors.warning,
+                                        fontWeight: FontWeight.semiBold
+                                    }}>
+                                        {(header.fscanfraction === 1 || header.fscanfraction === true) ? "Finish" : "On Process"}
+                                    </Text>
                                 </Text>
                             </View>
+                            
+                            {/* Sync Button */}
+                            <TouchableOpacity 
+                                onPress={handleSyncContainers}
+                                disabled={isSyncing || header.fscanfraction === 1 || header.fscanfraction === true}
+                                style={{
+                                    padding: 8,
+                                    backgroundColor: (header.fscanfraction === 1 || header.fscanfraction === true) ? Colors.gray100 : Colors.primary + "10",
+                                    borderRadius: BorderRadius.full,
+                                    alignSelf: 'center'
+                                }}
+                            >
+                                <Animated.View style={{ opacity: (isSyncing || header.fscanfraction === 1 || header.fscanfraction === true) ? 0.5 : 1 }}>
+                                    <Icon name="sync" size={24} color={(header.fscanfraction === 1 || header.fscanfraction === true) ? Colors.gray400 : Colors.primary} />
+                                </Animated.View>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -743,7 +799,24 @@ const SortingPoolScreen = ({ navigation }) => {
                                 </Text>
                                 <Text style={{ fontSize: FontSize.sm, color: Colors.textSecondary }}>{tokoCode} - {tokoName}</Text>
                             </View>
-                            <Icon name="chevron-right" size={24} color={Colors.gray400} />
+                            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                                <View style={{
+                                    backgroundColor: (item.fscanfraction === 1 || item.fscanfraction === true) ? Colors.successBg : Colors.warningBg,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 4,
+                                    borderRadius: 12,
+                                    marginBottom: 4,
+                                }}>
+                                    <Text style={{ 
+                                        fontSize: 10, 
+                                        fontWeight: FontWeight.bold, 
+                                        color: (item.fscanfraction === 1 || item.fscanfraction === true) ? Colors.success : Colors.warning 
+                                    }}>
+                                        {(item.fscanfraction === 1 || item.fscanfraction === true) ? "Finish" : "On Process"}
+                                    </Text>
+                                </View>
+                                <Icon name="chevron-right" size={24} color={Colors.gray400} />
+                            </View>
                         </TouchableOpacity>
                     );
                 })}

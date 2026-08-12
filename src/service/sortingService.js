@@ -94,6 +94,18 @@ const sortingService = {
     );
     return response.data;
   },
+
+  /**
+   * Sync detail container terbaru dari Backend 1 ke Backend 2
+   * @param {object} payload - { nopick, detailsData }
+   */
+  async syncContainers(payload) {
+    const response = await wmsApi.put(
+      `${WMS_PREFIX}/sortingpool/sync-containers`,
+      payload,
+    );
+    return response.data;
+  },
 };
 
 export default sortingService;
