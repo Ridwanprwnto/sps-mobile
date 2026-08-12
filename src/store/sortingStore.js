@@ -56,6 +56,7 @@ const useSortingStore = create((set, get) => ({
   isLoadingInit: false,       // loading saat init/fetch nopick
   isLoadingScan: false,       // loading saat scan container
   isCompleting: false,        // loading saat complete process
+  isSyncing: false,           // loading saat sync container
 
   // Error
   error: null,
@@ -374,6 +375,64 @@ const useSortingStore = create((set, get) => ({
       }
     } catch (error) {
       log.warn('[Sorting] refreshProgress error:', error?.message);
+    }
+  },
+
+  // ===========================================================================
+  // SYNC CONTAINERS
+  // ===========================================================================
+
+  /**
+   * Mengambil detail container terbaru dari Backend 1 (DPD) 
+   * dan menyinkronisasikannya ke Backend 2 (WMS)
+   */
+  syncContainers: async () => {
+    const { nopick } = get();
+    if (!nopick) {
+      return { success: false, message: 'Tidak ada proses sorting aktif' };
+    }
+
+    set({ isSyncing: true, error: null });
+    try {
+      // 1. Ambil data terbaru dari Backend 1 (DPD)
+      const dpdResponse = await sortingService.getPickDataFromDPD(nopick.trim());
+      if (!dpdResponse?.success || !dpdResponse?.data) {
+        const msg = `Gagal mengambil data terbaru dari DPD`;
+        set({ isSyncing: false, error: msg });
+        return { success: false, message: msg };
+      }
+
+      const headerData = dpdResponse.data.header;
+      const detailsData = dpdResponse.data.details;
+      if (!detailsData || detailsData.length === 0) {
+        const msg = `Data container kosong dari sistem DPD`;
+        set({ isSyncing: false, error: msg });
+        return { success: false, message: msg };
+      }
+
+      // 2. Sinkronisasikan ke Backend 2 (WMS)
+      const syncResponse = await sortingService.syncContainers({
+        nopick: nopick.trim(),
+        headerData,
+        detailsData
+      });
+
+      if (!syncResponse?.success) {
+        const msg = syncResponse?.message || 'Gagal sinkronisasi data container';
+        set({ isSyncing: false, error: msg });
+        return { success: false, message: msg };
+      }
+
+      // Update state dengan data terbaru
+      set({ sortingData: syncResponse.data || get().sortingData });
+      
+      set({ isSyncing: false, error: null });
+      return { success: true, message: 'Berhasil update container' };
+    } catch (error) {
+      const message = parseError(error, 'Gagal sinkronisasi container');
+      log.error('[Sorting] syncContainers error:', error?.message || error);
+      set({ isSyncing: false, error: message });
+      return { success: false, message };
     }
   },
 
