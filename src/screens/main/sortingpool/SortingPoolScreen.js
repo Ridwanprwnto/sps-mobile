@@ -187,7 +187,7 @@ const PhaseInput = ({ onSearch, isLoading, error, onReset, previewData, onStartS
                             <Text style={{ color: Colors.primary, fontWeight: FontWeight.bold }}>{previewData.data.details ? previewData.data.details.length : 0}</Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                            <Text style={{ color: Colors.textSecondary }}>Jumlah Container Terpakai</Text>
+                            <Text style={{ color: Colors.textSecondary }}>Status Container</Text>
                             <Text style={{ 
                                 color: (previewData.data.header.fscanfraction === 1 || previewData.data.header.fscanfraction === true) ? Colors.success : Colors.warning, 
                                 fontWeight: FontWeight.semiBold 
@@ -254,7 +254,7 @@ const ContainerItem = ({ item, index }) => {
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const SortingPoolScreen = ({ navigation }) => {
     const { user } = useAuthStore();
-    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, isSyncing, error, initSorting, checkPreviewNopick, scanContainer, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP, syncContainers } = useSortingStore();
+    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, isSyncing, error, initSorting, checkPreviewNopick, checkWMSProgress, scanContainer, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP, syncContainers } = useSortingStore();
 
     const [forceScanning, setForceScanning] = useState(false);
     const [filterTab, setFilterTab] = useState("all");
@@ -324,27 +324,49 @@ const SortingPoolScreen = ({ navigation }) => {
     );
 
     const handleSelectPickNumber = useCallback(
-        async (selectedNopick) => {
+        async (selectedNopick, floading) => {
             setPickListModalVisible(false);
             setInitError(null);
 
-            const result = await checkPreviewNopick(selectedNopick);
-            if (!result.success) {
-                setInitError(result.message);
-            } else {
-                if (result.source === "wms") {
-                    // Data sudah ada di WMS, langsung resume
-                    const initResult = await initSorting(selectedNopick, result);
+            const isFLoading = floading === true || floading === 1;
+
+            // ── Selalu cek dulu apakah data sudah ada di WMS (silent check) ────
+            const wmsResult = await checkWMSProgress(selectedNopick);
+
+            if (isFLoading) {
+                // ─── floading = true/1 ────────────────────────────────────────
+                if (wmsResult.exists) {
+                    // Data sudah ada di WMS → lanjut proses scan sortasi
+                    const initResult = await initSorting(selectedNopick, { source: 'wms', data: wmsResult.data });
                     if (!initResult.success) {
                         setInitError(initResult.message);
                     }
                 } else {
-                    // Data baru dari DPD, tampilkan preview konfirmasi
-                    setPreviewData({ nopick: selectedNopick, ...result });
+                    // Data belum ada di WMS → tampilkan error
+                    setInitError(
+                        `Nomor pick ${selectedNopick} sudah selesai loading. Proses sortasi tidak dapat dilakukan.`
+                    );
+                }
+            } else {
+                // ─── floading = false/0 ───────────────────────────────────────
+                if (wmsResult.exists) {
+                    // Data sudah ada di WMS → lanjut proses scan sortasi
+                    const initResult = await initSorting(selectedNopick, { source: 'wms', data: wmsResult.data });
+                    if (!initResult.success) {
+                        setInitError(initResult.message);
+                    }
+                } else {
+                    // Data belum ada di WMS → tampilkan previewData dari DPD
+                    const result = await checkPreviewNopick(selectedNopick);
+                    if (!result.success) {
+                        setInitError(result.message);
+                    } else {
+                        setPreviewData({ nopick: selectedNopick, ...result });
+                    }
                 }
             }
         },
-        [checkPreviewNopick, initSorting]
+        [checkWMSProgress, checkPreviewNopick, initSorting]
     );
 
     const handleStartSorting = useCallback(async () => {
@@ -551,6 +573,11 @@ const SortingPoolScreen = ({ navigation }) => {
                                         {header.tglpic || header.TglPic ? formatDate(header.tglpic || header.TglPic, "date") : "-"}
                                     </Text>
                                     <Text style={styles.progressToko}>
+                                        <Icon name="file-document-outline" size={14} color={Colors.textSecondary} />
+                                        {" SP: "}
+                                        {header.no_urutsp || header.NO_URUTSP || "-"}
+                                    </Text>
+                                    <Text style={styles.progressToko}>
                                         <Icon name="door" size={14} color={Colors.textSecondary} />
                                         {" Gate: "}
                                         {header.gate || header.Gate || "-"}
@@ -558,7 +585,7 @@ const SortingPoolScreen = ({ navigation }) => {
                                 </View>
                                 <Text style={styles.progressToko} numberOfLines={1}>
                                     <Icon name="progress-check" size={14} color={Colors.textSecondary} />
-                                    {" Jumlah Container Terpakai: "}
+                                    {" Status Container: "}
                                     <Text style={{ 
                                         color: (header.fscanfraction === 1 || header.fscanfraction === true) ? Colors.success : Colors.warning,
                                         fontWeight: FontWeight.semiBold
@@ -566,6 +593,16 @@ const SortingPoolScreen = ({ navigation }) => {
                                         {(header.fscanfraction === 1 || header.fscanfraction === true) ? "Finish" : "On Process"}
                                     </Text>
                                 </Text>
+                                {/* <Text style={styles.progressToko} numberOfLines={1}>
+                                    <Icon name="cloud-download-outline" size={14} color={Colors.textSecondary} />
+                                    {" Status Loading: "}
+                                    <Text style={{ 
+                                        color: (header.floading === 1 || header.floading === true) ? Colors.success : Colors.warning,
+                                        fontWeight: FontWeight.semiBold
+                                    }}>
+                                        {(header.floading === 1 || header.floading === true) ? "Finish" : "On Process"}
+                                    </Text>
+                                </Text> */}
                             </View>
                             
                             {/* Sync Button */}
@@ -790,7 +827,7 @@ const SortingPoolScreen = ({ navigation }) => {
                                     console.warn('[SortingPool] pickNumber undefined, item keys:', Object.keys(item));
                                     return;
                                 }
-                                handleSelectPickNumber(String(pickNumber));
+                                handleSelectPickNumber(String(pickNumber), item.floading);
                             }}
                         >
                             <View style={{ flex: 1 }}>
@@ -798,24 +835,6 @@ const SortingPoolScreen = ({ navigation }) => {
                                     {pickNumber || '(nomor pick tidak dikenali)'}
                                 </Text>
                                 <Text style={{ fontSize: FontSize.sm, color: Colors.textSecondary }}>{tokoCode} - {tokoName}</Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                                <View style={{
-                                    backgroundColor: (item.fscanfraction === 1 || item.fscanfraction === true) ? Colors.successBg : Colors.warningBg,
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 4,
-                                    borderRadius: 12,
-                                    marginBottom: 4,
-                                }}>
-                                    <Text style={{ 
-                                        fontSize: 10, 
-                                        fontWeight: FontWeight.bold, 
-                                        color: (item.fscanfraction === 1 || item.fscanfraction === true) ? Colors.success : Colors.warning 
-                                    }}>
-                                        {(item.fscanfraction === 1 || item.fscanfraction === true) ? "Finish" : "On Process"}
-                                    </Text>
-                                </View>
-                                <Icon name="chevron-right" size={24} color={Colors.gray400} />
                             </View>
                         </TouchableOpacity>
                     );

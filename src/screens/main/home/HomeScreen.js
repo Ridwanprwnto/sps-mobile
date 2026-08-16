@@ -132,40 +132,6 @@ const HomeScreen = ({ navigation }) => {
                     </View>
                 </View>
 
-                {/* Panduan Singkat */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Panduan Proses Sortasi</Text>
-                    <Card style={styles.guideCard} padding="md" shadow="sm">
-                        {[
-                            {
-                                step: "1",
-                                icon: "barcode",
-                                text: "Periksa nomor pick dengan melakukan input atau scan",
-                                color: Colors.accent,
-                            },
-                            {
-                                step: "2",
-                                icon: "package-variant-closed",
-                                text: "Memulai/melanjutkan proses sortasi dengan melakukan scan dusno/nomor container terpakai",
-                                color: Colors.warning,
-                            },
-                            {
-                                step: "3",
-                                icon: "check-circle-outline",
-                                text: "Tekan Complete untuk menyelesaikan proses sortasi",
-                                color: Colors.success,
-                            },
-                        ].map((item) => (
-                            <View key={item.step} style={styles.guideRow}>
-                                <View style={[styles.guideStepBadge, { backgroundColor: item.color + "22" }]}>
-                                    <Icon name={item.icon} size={18} color={item.color} />
-                                </View>
-                                <Text style={styles.guideText}>{item.text}</Text>
-                            </View>
-                        ))}
-                    </Card>
-                </View>
-
                 {/* Today Info */}
                 <View style={[styles.section, styles.infoSection]}>
                     <View style={styles.infoRow}>
@@ -361,27 +327,6 @@ const styles = StyleSheet.create({
         fontWeight: FontWeight.semiBold,
         color: Colors.textPrimary,
         textAlign: "center",
-    },
-    guideCard: {
-        gap: Spacing.md,
-    },
-    guideRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: Spacing.md,
-    },
-    guideStepBadge: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    guideText: {
-        flex: 1,
-        fontSize: FontSize.sm,
-        color: Colors.textSecondary,
-        lineHeight: 20,
     },
     infoSection: {
         backgroundColor: Colors.white,
