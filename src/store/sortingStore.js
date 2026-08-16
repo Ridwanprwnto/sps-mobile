@@ -159,8 +159,33 @@ const useSortingStore = create((set, get) => ({
   },
 
   /**
-   * Cek data nopick (di WMS atau DPD) HANYA untuk mendapatkan info preview
+   * Cek keberadaan data nopick di WMS secara silent (tanpa mengubah loading state).
+   * Digunakan sebelum memutuskan flow berdasarkan kondisi floading.
+   *
+   * @param {string} nopick
+   * @returns {{ exists: boolean, data?: object, source?: string }}
+   */
+  checkWMSProgress: async nopick => {
+    try {
+      const progressResponse = await sortingService.getProgress(nopick.trim()).catch(() => null);
+      if (progressResponse?.success && progressResponse?.data?.header) {
+        return {
+          exists: true,
+          data: progressResponse.data,
+          source: 'wms',
+        };
+      }
+      return { exists: false };
+    } catch {
+      return { exists: false };
+    }
+  },
+
+  /**
+   * Cek data nopick dari DPD HANYA untuk mendapatkan info preview
    * tanpa menginisiasi/menyimpan data ke WMS.
+   * Catatan: Pengecekan WMS dilakukan terlebih dahulu via checkWMSProgress
+   * sebelum memanggil fungsi ini.
    */
   checkPreviewNopick: async nopick => {
     if (!nopick || nopick.trim() === '') {
@@ -169,14 +194,7 @@ const useSortingStore = create((set, get) => ({
 
     set({isLoadingInit: true, error: null});
     try {
-      // 1. Cek progress WMS
-      const progressResponse = await sortingService.getProgress(nopick.trim()).catch(() => null);
-      if (progressResponse?.success && progressResponse?.data?.header) {
-        set({isLoadingInit: false});
-        return { success: true, data: { header: progressResponse.data.header, details: progressResponse.data.details }, source: 'wms' };
-      }
-
-      // 2. Fetch DPD jika belum ada di WMS
+      // Fetch DPD untuk mendapatkan data preview
       const dpdResponse = await sortingService.getPickDataFromDPD(nopick.trim());
       if (!dpdResponse?.success || !dpdResponse?.data) {
         const msg = `Nomor pick "${nopick}" tidak ditemukan di sistem DPD`;
