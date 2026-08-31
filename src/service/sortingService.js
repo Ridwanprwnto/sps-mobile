@@ -106,6 +106,19 @@ const sortingService = {
     );
     return response.data;
   },
+
+  /**
+   * Scan sejumlah N container sekaligus (count-based sorting).
+   * Backend menandai N container pertama yang belum terscan secara berurutan.
+   * @param {object} payload - { nopick, count, user }
+   */
+  async scanByCount(payload) {
+    const response = await wmsApi.put(
+      `${WMS_PREFIX}/sortingpool/scan-by-count`,
+      payload,
+    );
+    return response.data;
+  },
 };
 
 export default sortingService;

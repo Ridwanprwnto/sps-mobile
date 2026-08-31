@@ -5,8 +5,11 @@ import Icon from "@react-native-vector-icons/material-design-icons";
 import { useAuthStore, useSortingStore } from "../../../store";
 import { Button, ConfirmDialog, Snackbar, EmptyState, LoadingView, AppModal } from "../../../components";
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadow } from "../../../constants";
-import { calcProgress, getScanStatusConfig, formatDate } from "../../../utils";
+import { calcProgress, getScanStatusConfig, formatDate, Storage } from "../../../utils";
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+
+// ─── Storage Key: Preferensi metode scan (persistent antar sesi) ──────────────
+const SCAN_METHOD_STORAGE_KEY = 'sps_scan_method';
 
 // ─── HELPER: Ekstraksi Nomor Pick dari Barcode Container ──────────────────────
 /**
@@ -214,12 +217,18 @@ const ContainerItem = ({ item, index }) => {
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
+        let timer;
         if (isScanned) {
-            Animated.sequence([
-                Animated.timing(scaleAnim, { toValue: 1.05, duration: 150, useNativeDriver: true }),
-                Animated.timing(scaleAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
-            ]).start();
+            timer = setTimeout(() => {
+                Animated.sequence([
+                    Animated.timing(scaleAnim, { toValue: 1.05, duration: 150, useNativeDriver: false }),
+                    Animated.timing(scaleAnim, { toValue: 1, duration: 150, useNativeDriver: false }),
+                ]).start();
+            }, 50);
         }
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
     }, [isScanned]);
 
     return (
@@ -235,11 +244,6 @@ const ContainerItem = ({ item, index }) => {
                 <Text style={styles.containerMeta} numberOfLines={1}>
                     Zona: {item.zona || item.Zona || "-"}
                 </Text>
-                {item.scan_time && (
-                    <Text style={styles.containerTime}>
-                        <Icon name="clock-outline" size={10} color={Colors.gray400} /> {formatDate(item.scan_time, "datetime")}
-                    </Text>
-                )}
             </View>
 
             {/* Status badge */}
@@ -251,16 +255,59 @@ const ContainerItem = ({ item, index }) => {
     );
 };
 
+// ─── Count Log Item Row ───────────────────────────────────────────────────────
+const CountLogItem = ({ item, index }) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        // Berikan sedikit jeda agar Animated.View sepenuhnya ter-mount di UI thread
+        const timer = setTimeout(() => {
+            Animated.sequence([
+                Animated.timing(scaleAnim, { toValue: 1.05, duration: 150, useNativeDriver: false }),
+                Animated.timing(scaleAnim, { toValue: 1, duration: 150, useNativeDriver: false }),
+            ]).start();
+        }, 50);
+
+        return () => clearTimeout(timer);
+    }, []);
+
+    return (
+        <Animated.View style={[styles.containerItem, styles.containerItemScanned, { transform: [{ scale: scaleAnim }] }]}>
+            {/* Nomor urut batch */}
+            <View style={[styles.containerSeq, { backgroundColor: Colors.successBg }]}>
+                <Text style={[styles.containerSeqText, { color: Colors.success }]}>{String(index + 1).padStart(2, "0")}</Text>
+            </View>
+
+            {/* Info container */}
+            <View style={styles.containerInfo}>
+                <Text style={styles.containerDusno}>{item.jumlah} Container</Text>
+                <Text style={styles.containerMeta} numberOfLines={1}>
+                    Oleh: {item.scanned_by || "-"}
+                </Text>
+            </View>
+
+            {/* Status badge */}
+            <View style={[styles.containerStatus, { backgroundColor: Colors.successBg }]}>
+                <Icon name="check-circle" size={20} color={Colors.success} />
+                <Text style={[styles.containerStatusText, { color: Colors.success }]}></Text>
+            </View>
+        </Animated.View>
+    );
+};
+
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const SortingPoolScreen = ({ navigation }) => {
     const { user } = useAuthStore();
-    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, isSyncing, error, initSorting, checkPreviewNopick, checkWMSProgress, scanContainer, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP, syncContainers } = useSortingStore();
+    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, isSyncing, error, initSorting, checkPreviewNopick, checkWMSProgress, scanContainer, scanByCount, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP, syncContainers } = useSortingStore();
 
     const [forceScanning, setForceScanning] = useState(false);
+
+    // Metode scan: 'scan' (barcode) | 'count' (input jumlah)
+    const [scanMethod, setScanMethod] = useState('scan');
+    const [countInput, setCountInput] = useState("");
     const [filterTab, setFilterTab] = useState("all");
     const [scanInput, setScanInput] = useState("");
     const [showComplete, setShowComplete] = useState(false);
-    const [showReset, setShowReset] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [snackbar, setSnackbar] = useState({ visible: false, message: "", type: "info" });
     const [initError, setInitError] = useState(null);
@@ -274,14 +321,46 @@ const SortingPoolScreen = ({ navigation }) => {
     const phase = !nopick ? "input" : sortingData?.header?.status === "completed" && !forceScanning ? "completed" : "scanning";
 
     const scanInputRef = useRef(null);
+    const countInputRef = useRef(null);
     const listRef = useRef(null);
 
-    // Auto focus scan input when entering scanning phase
+    // Load preferensi metode scan dari storage saat pertama kali masuk scanning phase
+    useEffect(() => {
+        (async () => {
+            const saved = await Storage.get(SCAN_METHOD_STORAGE_KEY);
+            if (saved === 'scan' || saved === 'count') {
+                setScanMethod(saved);
+            }
+        })();
+    }, []);
+
+    // Auto focus input yang aktif saat masuk scanning phase
     useEffect(() => {
         if (phase === "scanning") {
-            setTimeout(() => scanInputRef.current?.focus(), 400);
+            setTimeout(() => {
+                if (scanMethod === 'scan') {
+                    scanInputRef.current?.focus();
+                } else {
+                    countInputRef.current?.focus();
+                }
+            }, 400);
         }
-    }, [phase]);
+    }, [phase, scanMethod]);
+
+    // Handler ganti metode scan + simpan ke storage
+    const handleScanMethodChange = useCallback(async (method) => {
+        setScanMethod(method);
+        setCountInput("");
+        setScanInput("");
+        await Storage.set(SCAN_METHOD_STORAGE_KEY, method);
+        setTimeout(() => {
+            if (method === 'scan') {
+                scanInputRef.current?.focus();
+            } else {
+                countInputRef.current?.focus();
+            }
+        }, 200);
+    }, []);
 
     // Derived data
     const header = sortingData?.header || {};
@@ -298,6 +377,13 @@ const SortingPoolScreen = ({ navigation }) => {
     const scannedCount = details.filter((d) => d.is_scanned === true).length;
     const progress = calcProgress(scannedCount, totalCount);
     const allScanned = totalCount > 0 && scannedCount === totalCount;
+
+    // Derived data untuk metode count (dari sorting_pool_count_log)
+    const countLog = sortingData?.count_log || { total_sorted: 0, batch_count: 0, logs: [] };
+    const countSortedTotal = countLog.total_sorted || 0;
+    const countProgress = calcProgress(countSortedTotal, totalCount);
+    const allCountSorted = totalCount > 0 && countSortedTotal >= totalCount;
+    const countRemaining = totalCount - countSortedTotal;
 
     // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -425,6 +511,31 @@ const SortingPoolScreen = ({ navigation }) => {
         }
     }, [scanInput, scanContainer, details]);
 
+    const handleCountSubmit = useCallback(async () => {
+        const count = countInput.trim();
+        if (!count || count === '0') return;
+
+        setCountInput("");
+        Keyboard.dismiss();
+
+        const result = await scanByCount(parseInt(count, 10));
+        if (result.success) {
+            setSnackbar({
+                visible: true,
+                message: `✓ ${count} container berhasil ditambahkan`,
+                type: "success",
+            });
+            setTimeout(() => countInputRef.current?.focus(), 300);
+        } else {
+            setSnackbar({
+                visible: true,
+                message: result.message || "Gagal memproses jumlah container",
+                type: "error",
+            });
+            setTimeout(() => countInputRef.current?.focus(), 300);
+        }
+    }, [countInput, scanByCount]);
+
     const handleComplete = useCallback(async () => {
         setShowComplete(false);
         const result = await completeProcess();
@@ -445,7 +556,6 @@ const SortingPoolScreen = ({ navigation }) => {
     }, [completeProcess]);
 
     const handleReset = useCallback(() => {
-        setShowReset(false);
         setForceScanning(false);
         setInitError(null);
         setScanInput("");
@@ -518,7 +628,7 @@ const SortingPoolScreen = ({ navigation }) => {
                     {nopick && <Text style={styles.headerSubtitle}>Nopick: {nopick}</Text>}
                 </View>
                 {nopick && (
-                    <TouchableOpacity onPress={() => setShowReset(true)} style={styles.headerAction}>
+                    <TouchableOpacity onPress={handleReset} style={styles.headerAction}>
                         <Icon name="refresh" size={22} color={Colors.white} />
                     </TouchableOpacity>
                 )}
@@ -543,21 +653,34 @@ const SortingPoolScreen = ({ navigation }) => {
             {/* ── Phase: Scanning ── */}
             {phase === "scanning" && (
                 <View style={styles.flex}>
-                    {/* Progress Bar */}
+                    {/* Progress Bar — kondisional berdasarkan metode scan */}
                     <View style={styles.progressSection}>
                         <View style={styles.progressHeader}>
                             <View>
-                                <Text style={styles.progressLabel}>Progress Scan</Text>
+                                <Text style={styles.progressLabel}>
+                                    {scanMethod === 'count' ? 'Progress Input' : 'Progress Scan'}
+                                </Text>
                                 <Text style={styles.progressDetail}>
-                                    {scannedCount} dari {totalCount} container
+                                    {scanMethod === 'count'
+                                        ? `${countSortedTotal} dari ${totalCount} container`
+                                        : `${scannedCount} dari ${totalCount} container`
+                                    }
                                 </Text>
                             </View>
                             <View style={styles.progressBadge}>
-                                <Text style={styles.progressPct}>{progress}%</Text>
+                                <Text style={styles.progressPct}>
+                                    {scanMethod === 'count' ? countProgress : progress}%
+                                </Text>
                             </View>
                         </View>
                         <View style={styles.progressBarBg}>
-                            <Animated.View style={[styles.progressBarFill, { width: `${progress}%` }, allScanned && { backgroundColor: Colors.success }]} />
+                            <Animated.View 
+                                style={[
+                                    styles.progressBarFill, 
+                                    { width: `${scanMethod === 'count' ? countProgress : progress}%` }, 
+                                    (scanMethod === 'count' ? allCountSorted : allScanned) && { backgroundColor: Colors.success }
+                                ]} 
+                            />
                         </View>
                         
                         {/* Detail Header Info */}
@@ -593,16 +716,6 @@ const SortingPoolScreen = ({ navigation }) => {
                                         {(header.fscanfraction === 1 || header.fscanfraction === true) ? "Finish" : "On Process"}
                                     </Text>
                                 </Text>
-                                {/* <Text style={styles.progressToko} numberOfLines={1}>
-                                    <Icon name="cloud-download-outline" size={14} color={Colors.textSecondary} />
-                                    {" Status Loading: "}
-                                    <Text style={{ 
-                                        color: (header.floading === 1 || header.floading === true) ? Colors.success : Colors.warning,
-                                        fontWeight: FontWeight.semiBold
-                                    }}>
-                                        {(header.floading === 1 || header.floading === true) ? "Finish" : "On Process"}
-                                    </Text>
-                                </Text> */}
                             </View>
                             
                             {/* Sync Button */}
@@ -623,93 +736,189 @@ const SortingPoolScreen = ({ navigation }) => {
                         </View>
                     </View>
 
-                    {/* Scan Input */}
-                    <View style={styles.scanSection}>
-                        <View style={[styles.scanInputWrap, isLoadingScan && { borderColor: Colors.accent }]}>
-                            <Icon name="barcode-scan" size={22} color={Colors.primary} style={styles.scanInputIcon} />
-                            <TextInput
-                                ref={scanInputRef}
-                                style={styles.scanInput}
-                                placeholder="Scan / ketik nomor container..."
-                                placeholderTextColor={Colors.gray300}
-                                value={scanInput}
-                                onChangeText={setScanInput}
-                                autoCapitalize="characters"
-                                returnKeyType="done"
-                                onSubmitEditing={handleScan}
-                                editable={!isLoadingScan && !refreshing}
+                    {/* ── Metode Scan Toggle ── */}
+                    <View style={styles.scanMethodToggleWrap}>
+                        <TouchableOpacity
+                            style={[styles.scanMethodTab, scanMethod === 'scan' && styles.scanMethodTabActive]}
+                            onPress={() => handleScanMethodChange('scan')}
+                            activeOpacity={0.8}
+                            disabled={isLoadingScan}
+                        >
+                            <Icon
+                                name="barcode-scan"
+                                size={16}
+                                color={scanMethod === 'scan' ? Colors.white : Colors.textSecondary}
                             />
-                            {isLoadingScan ? (
-                                <View style={styles.scanSpinner}>
-                                    <Icon name="loading" size={18} color={Colors.accent} />
+                            <Text style={[styles.scanMethodTabText, scanMethod === 'scan' && styles.scanMethodTabTextActive]}>
+                                Scan Container
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.scanMethodTab, scanMethod === 'count' && styles.scanMethodTabActive]}
+                            onPress={() => handleScanMethodChange('count')}
+                            activeOpacity={0.8}
+                            disabled={isLoadingScan}
+                        >
+                            <Icon
+                                name="numeric"
+                                size={16}
+                                color={scanMethod === 'count' ? Colors.white : Colors.textSecondary}
+                            />
+                            <Text style={[styles.scanMethodTabText, scanMethod === 'count' && styles.scanMethodTabTextActive]}>
+                                Input Container
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Scan Input (kondisional berdasarkan metode) */}
+                    <View style={styles.scanSection}>
+                        {scanMethod === 'scan' ? (
+                            /* ── Metode 1: Scan Barcode (existing) ── */
+                            <View style={[styles.scanInputWrap, isLoadingScan && { borderColor: Colors.accent }]}>
+                                <Icon name="barcode-scan" size={22} color={Colors.primary} style={styles.scanInputIcon} />
+                                <TextInput
+                                    ref={scanInputRef}
+                                    style={styles.scanInput}
+                                    placeholder="Scan / ketik nomor container..."
+                                    placeholderTextColor={Colors.gray300}
+                                    value={scanInput}
+                                    onChangeText={setScanInput}
+                                    autoCapitalize="characters"
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleScan}
+                                    editable={!isLoadingScan && !refreshing}
+                                />
+                                {isLoadingScan ? (
+                                    <View style={styles.scanSpinner}>
+                                        <Icon name="loading" size={18} color={Colors.accent} />
+                                    </View>
+                                ) : (
+                                    scanInput.length > 0 && (
+                                        <TouchableOpacity onPress={handleScan} style={styles.scanSendBtn} disabled={refreshing}>
+                                            <Icon name="arrow-right-circle" size={28} color={refreshing ? Colors.gray300 : Colors.primary} />
+                                        </TouchableOpacity>
+                                    )
+                                )}
+                            </View>
+                        ) : (
+                            /* ── Metode 2: Input Jumlah Container ── */
+                            <View style={styles.countInputWrap}>
+                                <View style={[styles.scanInputWrap, isLoadingScan && { borderColor: Colors.accent }]}>
+                                    <Icon name="numeric" size={22} color={Colors.primary} style={styles.scanInputIcon} />
+                                    <TextInput
+                                        ref={countInputRef}
+                                        style={styles.scanInput}
+                                        placeholder="Masukkan jumlah container..."
+                                        placeholderTextColor={Colors.gray300}
+                                        value={countInput}
+                                        onChangeText={(text) => setCountInput(text.replace(/[^0-9]/g, ''))}
+                                        keyboardType="number-pad"
+                                        returnKeyType="done"
+                                        onSubmitEditing={handleCountSubmit}
+                                        editable={!isLoadingScan && !refreshing && countRemaining > 0}
+                                    />
+                                    {isLoadingScan ? (
+                                        <View style={styles.scanSpinner}>
+                                            <Icon name="loading" size={18} color={Colors.accent} />
+                                        </View>
+                                    ) : (
+                                        countInput.length > 0 && countInput !== '0' && (
+                                            <TouchableOpacity onPress={handleCountSubmit} style={styles.scanSendBtn} disabled={refreshing}>
+                                                <Icon name="arrow-right-circle" size={28} color={refreshing ? Colors.gray300 : Colors.primary} />
+                                            </TouchableOpacity>
+                                        )
+                                    )}
                                 </View>
-                            ) : (
-                                scanInput.length > 0 && (
-                                    <TouchableOpacity onPress={handleScan} style={styles.scanSendBtn} disabled={refreshing}>
-                                        <Icon name="arrow-right-circle" size={28} color={refreshing ? Colors.gray300 : Colors.primary} />
-                                    </TouchableOpacity>
-                                )
-                            )}
-                        </View>
+                            </View>
+                        )}
                     </View>
 
-                    {/* Filter Tabs */}
-                    <View style={{ flexDirection: "row", paddingHorizontal: Spacing.base, paddingTop: Spacing.md, gap: Spacing.xs }}>
-                        {["all", "pending", "scanned"].map((tab) => {
-                            const isActive = filterTab === tab;
-                            const label = tab === "all" ? "Semua" : tab === "pending" ? "Belum Scan" : "Sudah Scan";
-                            return (
-                                <TouchableOpacity
-                                    key={tab}
-                                    onPress={() => setFilterTab(tab)}
-                                    style={{
-                                        flex: 1,
-                                        paddingVertical: 8,
-                                        alignItems: "center",
-                                        backgroundColor: isActive ? Colors.primary : Colors.gray100,
-                                        borderRadius: BorderRadius.md,
-                                        borderWidth: 1,
-                                        borderColor: isActive ? Colors.primary : Colors.border,
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            fontSize: FontSize.xs,
-                                            fontWeight: isActive ? FontWeight.bold : FontWeight.medium,
-                                            color: isActive ? Colors.white : Colors.textSecondary,
-                                        }}
-                                    >
-                                        {label}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
+                    {/* Daftar List Berdasarkan Metode */}
+                    {scanMethod === 'scan' ? (
+                        <>
+                            {/* Filter Tabs */}
+                            <View style={{ flexDirection: "row", paddingHorizontal: Spacing.base, paddingTop: Spacing.md, gap: Spacing.xs }}>
+                                {["all", "pending", "scanned"].map((tab) => {
+                                    const isActive = filterTab === tab;
+                                    const label = tab === "all" ? "Semua" : tab === "pending" ? "Belum Scan" : "Sudah Scan";
+                                    return (
+                                        <TouchableOpacity
+                                            key={tab}
+                                            onPress={() => setFilterTab(tab)}
+                                            style={{
+                                                flex: 1,
+                                                paddingVertical: 8,
+                                                alignItems: "center",
+                                                backgroundColor: isActive ? Colors.primary : Colors.gray100,
+                                                borderRadius: BorderRadius.md,
+                                                borderWidth: 1,
+                                                borderColor: isActive ? Colors.primary : Colors.border,
+                                            }}
+                                        >
+                                            <Text
+                                                style={{
+                                                    fontSize: FontSize.xs,
+                                                    fontWeight: isActive ? FontWeight.bold : FontWeight.medium,
+                                                    color: isActive ? Colors.white : Colors.textSecondary,
+                                                }}
+                                            >
+                                                {label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
 
-                    {/* Container List */}
-                    <FlatList
-                        ref={listRef}
-                        data={filteredDetails}
-                        keyExtractor={(item, idx) => (item.dusno || item.DusNo || idx).toString()}
-                        renderItem={({ item, index }) => <ContainerItem item={item} index={index} />}
-                        contentContainerStyle={styles.listContent}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-                        ListEmptyComponent={<EmptyState icon="package-variant-closed" title="Tidak Ada Container" description="Data container untuk nopick ini kosong" />}
-                    />
+                            {/* Container List */}
+                            <FlatList
+                                key="list-scan"
+                                ref={listRef}
+                                data={filteredDetails}
+                                keyExtractor={(item, idx) => (item.dusno || item.DusNo || idx).toString()}
+                                renderItem={({ item, index }) => <ContainerItem item={item} index={index} />}
+                                contentContainerStyle={styles.listContent}
+                                showsVerticalScrollIndicator={false}
+                                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+                                ListEmptyComponent={<EmptyState icon="package-variant-closed" title="Tidak Ada Container" description="Data container untuk nopick ini kosong" />}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            {/* Count Log List */}
+                            <FlatList
+                                key="list-count"
+                                data={countLog.logs || []}
+                                keyExtractor={(item, idx) => (item.id || idx).toString()}
+                                renderItem={({ item, index }) => <CountLogItem item={item} index={index} />}
+                                contentContainerStyle={styles.listContent}
+                                showsVerticalScrollIndicator={false}
+                                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+                                ListEmptyComponent={<EmptyState icon="history" title="Belum Ada Riwayat" description="Riwayat input container akan tampil di sini" />}
+                            />
+                        </>
+                    )}
 
                     {/* Complete Button */}
                     <View style={styles.completeSection}>
-                        {!allScanned && (
-                            <Text style={styles.completeHint}>
-                                <Icon name="information-outline" size={14} color={Colors.textSecondary} />
-                                {`  ${totalCount - scannedCount} container belum discan`}
-                            </Text>
+                        {scanMethod === 'count' ? (
+                            !allCountSorted && (
+                                <Text style={styles.completeHint}>
+                                    <Icon name="information-outline" size={14} color={Colors.textSecondary} />
+                                    {`  ${countRemaining} container belum diinput`}
+                                </Text>
+                            )
+                        ) : (
+                            !allScanned && (
+                                <Text style={styles.completeHint}>
+                                    <Icon name="information-outline" size={14} color={Colors.textSecondary} />
+                                    {`  ${totalCount - scannedCount} container belum discan`}
+                                </Text>
+                            )
                         )}
                         <Button
-                            title={allScanned ? "Selesaikan Sortasi" : "Force Complete"}
+                            title={(scanMethod === 'count' ? allCountSorted : allScanned) ? "Complete" : "Force Complete"}
                             onPress={() => setShowComplete(true)}
-                            variant={allScanned ? "success" : "outline"}
+                            variant={(scanMethod === 'count' ? allCountSorted : allScanned) ? "success" : "outline"}
                             fullWidth
                             size="lg"
                             iconRight="check-circle"
@@ -735,8 +944,12 @@ const SortingPoolScreen = ({ navigation }) => {
                         {/* Summary */}
                         <View style={styles.completedSummary}>
                             <View style={styles.completedSummaryItem}>
-                                <Text style={styles.completedSummaryValue}>{scannedCount}</Text>
-                                <Text style={styles.completedSummaryLabel}>Terscan</Text>
+                                <Text style={styles.completedSummaryValue}>
+                                    {scanMethod === 'count' ? countSortedTotal : scannedCount}
+                                </Text>
+                                <Text style={styles.completedSummaryLabel}>
+                                    {scanMethod === 'count' ? 'Diinput' : 'Terscan'}
+                                </Text>
                             </View>
                             <View style={styles.completedSummaryDivider} />
                             <View style={styles.completedSummaryItem}>
@@ -745,13 +958,23 @@ const SortingPoolScreen = ({ navigation }) => {
                             </View>
                             <View style={styles.completedSummaryDivider} />
                             <View style={styles.completedSummaryItem}>
-                                <Text style={styles.completedSummaryValue}>{progress}%</Text>
+                                <Text style={styles.completedSummaryValue}>
+                                    {scanMethod === 'count' ? countProgress : progress}%
+                                </Text>
                                 <Text style={styles.completedSummaryLabel}>Progress</Text>
                             </View>
                         </View>
 
                         <Button title="Mulai Nopick Baru" onPress={handleReset} variant="primary" fullWidth size="lg" iconLeft="plus-circle" style={styles.completedBtn} />
-                        <Button title="Proses Scan Ulang" onPress={() => setForceScanning(true)} variant="outline" fullWidth size="md" iconLeft="barcode-scan" style={{ marginTop: Spacing.sm }} />
+                        <Button 
+                            title={scanMethod === 'count' ? "Proses Input Ulang" : "Proses Scan Ulang"} 
+                            onPress={() => setForceScanning(true)} 
+                            variant="outline" 
+                            fullWidth 
+                            size="md" 
+                            iconLeft={scanMethod === 'count' ? "numeric" : "barcode-scan"} 
+                            style={{ marginTop: Spacing.sm }} 
+                        />
                         <Button
                             title="Kembali ke Beranda"
                             onPress={() => {
@@ -774,26 +997,20 @@ const SortingPoolScreen = ({ navigation }) => {
                 onConfirm={handleComplete}
                 title="Selesaikan Sortasi"
                 message={
-                    allScanned
-                        ? `Semua ${totalCount} container telah terscan. Yakin ingin menyelesaikan proses sortasi nopick "${nopick}"?`
-                        : `Baru ${scannedCount} dari ${totalCount} container yang terscan. Apakah Anda yakin ingin force complete?`
+                    scanMethod === 'count'
+                        ? (allCountSorted
+                            ? `Semua ${totalCount} container telah diinput jumlahnya. Yakin ingin menyelesaikan proses sortasi nopick "${nopick}"?`
+                            : `Baru ${countSortedTotal} dari ${totalCount} container yang diinput. Apakah Anda yakin ingin force complete?`)
+                        : (allScanned
+                            ? `Semua ${totalCount} container telah terscan. Yakin ingin menyelesaikan proses sortasi nopick "${nopick}"?`
+                            : `Baru ${scannedCount} dari ${totalCount} container yang terscan. Apakah Anda yakin ingin force complete?`)
                 }
                 confirmLabel="Ya, Selesaikan"
                 confirmVariant="primary"
-                type={allScanned ? "success" : "warning"}
+                type={(scanMethod === 'count' ? allCountSorted : allScanned) ? "success" : "warning"}
                 isLoading={isCompleting}
             />
 
-            <ConfirmDialog
-                visible={showReset}
-                onClose={() => setShowReset(false)}
-                onConfirm={handleReset}
-                title="Mulai Ulang"
-                message="Apakah Anda ingin keluar dari nopick ini dan mulai dengan nopick baru? Proses yang sudah berjalan tidak akan dihapus."
-                confirmLabel="Ya, Ganti Nopick"
-                confirmVariant="primary"
-                type="warning"
-            />
 
             <AppModal
                 visible={pickListModalVisible}
@@ -1017,6 +1234,43 @@ const styles = StyleSheet.create({
         marginTop: Spacing.xs,
     },
 
+    // Scan Method Toggle
+    scanMethodToggleWrap: {
+        flexDirection: "row",
+        paddingHorizontal: Spacing.base,
+        paddingTop: Spacing.sm,
+        paddingBottom: Spacing.xs,
+        backgroundColor: Colors.gray50,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+        gap: Spacing.xs,
+    },
+    scanMethodTab: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: Spacing.sm,
+        borderRadius: BorderRadius.md,
+        backgroundColor: Colors.gray100,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    scanMethodTabActive: {
+        backgroundColor: Colors.primary,
+        borderColor: Colors.primary,
+    },
+    scanMethodTabText: {
+        fontSize: FontSize.sm,
+        fontWeight: FontWeight.medium,
+        color: Colors.textSecondary,
+    },
+    scanMethodTabTextActive: {
+        color: Colors.white,
+        fontWeight: FontWeight.semiBold,
+    },
+
     // Scan Input Section
     scanSection: {
         paddingHorizontal: Spacing.base,
@@ -1045,6 +1299,11 @@ const styles = StyleSheet.create({
     },
     scanSpinner: { paddingHorizontal: Spacing.sm },
     scanSendBtn: { paddingHorizontal: Spacing.xs },
+
+    // Count Input Section
+    countInputWrap: {
+        gap: Spacing.xs,
+    },
 
     // Container List
     listContent: {
@@ -1088,11 +1347,6 @@ const styles = StyleSheet.create({
     containerMeta: {
         fontSize: FontSize.xs,
         color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    containerTime: {
-        fontSize: 10,
-        color: Colors.gray400,
         marginTop: 2,
     },
     containerStatus: {
