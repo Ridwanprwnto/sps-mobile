@@ -74,8 +74,8 @@ export const truncateText = (text, maxLength = 30) => {
  */
 export const getScanStatusConfig = status => {
   const configs = {
-    Y: {label: 'Terscan', color: '#06D6A0', bg: '#E6FFF7', icon: 'check-circle'},
-    N: {label: 'Belum Scan', color: '#94A3B8', bg: '#F1F5F9', icon: 'circle-outline'},
+    Y: {label: '', color: '#06D6A0', bg: '#E6FFF7', icon: 'check-circle'},
+    N: {label: '', color: '#94A3B8', bg: '#F1F5F9', icon: 'circle-outline'},
   };
   return configs[status] || {label: status, color: '#64748B', bg: '#F1F5F9', icon: 'circle-outline'};
 };

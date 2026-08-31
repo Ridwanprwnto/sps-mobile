@@ -1,4 +1,4 @@
-// src/store/sortingStore.js
+﻿// src/store/sortingStore.js
 import {create} from 'zustand';
 import {sortingService} from '../service';
 import {log} from '../utils';
@@ -451,6 +451,101 @@ const useSortingStore = create((set, get) => ({
       log.error('[Sorting] syncContainers error:', error?.message || error);
       set({ isSyncing: false, error: message });
       return { success: false, message };
+    }
+  },
+
+  // ===========================================================================
+  // SCAN BY COUNT (COUNT-BASED SORTING)
+  // Input sejumlah N container — INSERT ke tabel sorting_pool_count_log
+  // Tabel sorting_pool_detail TIDAK disentuh oleh metode ini.
+  // ===========================================================================
+
+  /**
+   * Proses penyortiran sejumlah N container sekaligus (count-based).
+   *
+   * Setiap pemanggilan INSERT satu baris baru ke sorting_pool_count_log.
+   * Validasi: SUM(jumlah existing) + count_baru <= total container di detail.
+   * Tabel sorting_pool_detail tidak diubah sama sekali.
+   *
+   * @param {number} count - Jumlah container yang disortir dalam satu batch
+   * @returns {{ success: boolean, message?: string, data?: object }}
+   */
+  scanByCount: async count => {
+    const {nopick, sortingData} = get();
+    if (!nopick) {
+      return {success: false, message: 'Tidak ada proses sorting aktif'};
+    }
+
+    const parsedCount = parseInt(count, 10);
+    if (!parsedCount || parsedCount <= 0 || isNaN(parsedCount)) {
+      return {success: false, message: 'Jumlah container harus berupa angka positif'};
+    }
+
+    // Validasi lokal berbasis count_log (tidak memeriksa is_scanned di details)
+    const totalDetail = (sortingData?.details || []).length;
+    const countLog = sortingData?.count_log || {total_sorted: 0, batch_count: 0, logs: []};
+    const currentSum = countLog.total_sorted || 0;
+
+    if (currentSum + parsedCount > totalDetail) {
+      return {
+        success: false,
+        message: `Jumlah input (${parsedCount}) melebihi sisa container yang belum disortir (${totalDetail - currentSum})`,
+      };
+    }
+
+    set({isLoadingScan: true, error: null});
+    try {
+      const authUser = getAuthStore().getState().user;
+      const username = authUser?.username || authUser?.name || 'SPS_USER';
+
+      const response = await sortingService.scanByCount({
+        nopick,
+        count: parsedCount,
+        user: username,
+      });
+
+      if (!response?.success) {
+        const msg = response?.message || 'Gagal memproses jumlah container';
+        set({isLoadingScan: false, error: msg});
+        return {success: false, message: msg};
+      }
+
+      // Jika backend mengembalikan data terbaru yang utuh (termasuk count_log), gunakan itu
+      if (response.data && response.data.count_log !== undefined) {
+        set({sortingData: response.data});
+      } else {
+        // OPTIMISTIC UPDATE: update count_log lokal saja, details TIDAK diubah sama sekali
+        const currentData = get().sortingData;
+        const prevLog = currentData?.count_log || {total_sorted: 0, batch_count: 0, logs: []};
+        const newLogEntry = {
+          id:         Date.now(), // ID sementara, diganti setelah background refresh
+          jumlah:     parsedCount,
+          scanned_by: username,
+          scanned_at: new Date().toISOString(),
+        };
+        set({
+          sortingData: {
+            ...currentData,
+            count_log: {
+              total_sorted: (prevLog.total_sorted || 0) + parsedCount,
+              batch_count:  (prevLog.batch_count  || 0) + 1,
+              logs:         [...(prevLog.logs || []), newLogEntry],
+            },
+          },
+        });
+        // Sinkronisasi penuh di background untuk mengganti ID sementara dengan ID asli dari DB
+        get().refreshProgress().catch(e => log.warn('Background sync failed:', e));
+      }
+
+      set({isLoadingScan: false, error: null});
+
+      log.info('[Sorting] scanByCount success:', parsedCount, 'containers for nopick:', nopick);
+      return {success: true, data: response.data};
+    } catch (error) {
+      const message = parseError(error, 'Gagal memproses jumlah container');
+      log.error('[Sorting] scanByCount error:', error?.message || error);
+      set({isLoadingScan: false, error: message});
+      return {success: false, message};
     }
   },
 
