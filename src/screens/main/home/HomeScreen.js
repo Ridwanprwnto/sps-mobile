@@ -33,7 +33,7 @@ const QuickMenu = ({ icon, label, color, bg, onPress }) => (
 
 const HomeScreen = ({ navigation }) => {
     const { user, logout } = useAuthStore();
-    const { sortingData } = useSortingStore();
+    const { sortingData, scanMethod } = useSortingStore();
 
     const [refreshing, setRefreshing] = useState(false);
     const [showLogout, setShowLogout] = useState(false);
@@ -69,6 +69,12 @@ const HomeScreen = ({ navigation }) => {
     const activeSortingNopick = sortingData?.header?.nopick || null;
     const detailsCount = sortingData?.details?.length || 0;
     const scannedCount = sortingData?.details?.filter((d) => d.is_scanned === true).length || 0;
+    const countSortedTotal = sortingData?.count_log?.total_sorted || 0;
+    
+    const summaryLabel = scanMethod === 'count' ? 'Diinput' : 'Terscan';
+    const summaryValue = detailsCount > 0 
+        ? (scanMethod === 'count' ? `${countSortedTotal}/${detailsCount}` : `${scannedCount}/${detailsCount}`)
+        : "-";
 
     return (
         <View style={styles.root}>
@@ -104,7 +110,7 @@ const HomeScreen = ({ navigation }) => {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.summaryScroll} contentContainerStyle={styles.summaryContent}>
                         <SummaryCard label="Nopick Aktif" value={activeSortingNopick || "-"} icon="barcode-scan" color={Colors.white} bg="rgba(255,255,255,0.15)" />
                         <SummaryCard label="Total Container" value={detailsCount || "-"} icon="package-variant" color={Colors.white} bg="rgba(255,255,255,0.15)" />
-                        <SummaryCard label="Terscan" value={detailsCount > 0 ? `${scannedCount}/${detailsCount}` : "-"} icon="check-circle" color={Colors.white} bg="rgba(255,255,255,0.15)" />
+                        <SummaryCard label={summaryLabel} value={summaryValue} icon={scanMethod === 'count' ? "numeric" : "check-circle"} color={Colors.white} bg="rgba(255,255,255,0.15)" />
                     </ScrollView>
                 </View>
             </View>

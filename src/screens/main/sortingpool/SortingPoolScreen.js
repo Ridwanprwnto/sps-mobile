@@ -192,8 +192,7 @@ const PhaseInput = ({ onSearch, isLoading, error, onReset, previewData, onStartS
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                             <Text style={{ color: Colors.textSecondary }}>Status Container</Text>
                             <Text style={{ 
-                                color: (previewData.data.header.fscanfraction === 1 || previewData.data.header.fscanfraction === true) ? Colors.success : Colors.warning, 
-                                fontWeight: FontWeight.semiBold 
+                                color: (previewData.data.header.fscanfraction === 1 || previewData.data.header.fscanfraction === true) ? Colors.success : Colors.warning, fontWeight: FontWeight.semiBold
                             }}>
                                 {(previewData.data.header.fscanfraction === 1 || previewData.data.header.fscanfraction === true) ? "Finish" : "On Process"}
                             </Text>
@@ -298,12 +297,12 @@ const CountLogItem = ({ item, index }) => {
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 const SortingPoolScreen = ({ navigation }) => {
     const { user } = useAuthStore();
-    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, isSyncing, error, initSorting, checkPreviewNopick, checkWMSProgress, scanContainer, scanByCount, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP, syncContainers } = useSortingStore();
+    const { nopick, sortingData, isLoadingInit, isLoadingScan, isCompleting, isSyncing, error, initSorting, checkPreviewNopick, checkWMSProgress, scanContainer, scanByCount, completeProcess, resetSorting, resetError, searchPreviewByTglAndSP, syncContainers, scanMethod, setScanMethod } = useSortingStore();
 
     const [forceScanning, setForceScanning] = useState(false);
 
     // Metode scan: 'scan' (barcode) | 'count' (input jumlah)
-    const [scanMethod, setScanMethod] = useState('scan');
+    // Diambil dari store
     const [countInput, setCountInput] = useState("");
     const [filterTab, setFilterTab] = useState("all");
     const [scanInput, setScanInput] = useState("");
@@ -706,16 +705,6 @@ const SortingPoolScreen = ({ navigation }) => {
                                         {header.gate || header.Gate || "-"}
                                     </Text>
                                 </View>
-                                <Text style={styles.progressToko} numberOfLines={1}>
-                                    <Icon name="progress-check" size={14} color={Colors.textSecondary} />
-                                    {" Status Container: "}
-                                    <Text style={{ 
-                                        color: (header.fscanfraction === 1 || header.fscanfraction === true) ? Colors.success : Colors.warning,
-                                        fontWeight: FontWeight.semiBold
-                                    }}>
-                                        {(header.fscanfraction === 1 || header.fscanfraction === true) ? "Finish" : "On Process"}
-                                    </Text>
-                                </Text>
                             </View>
                             
                             {/* Sync Button */}
