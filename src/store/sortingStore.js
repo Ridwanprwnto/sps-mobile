@@ -1,4 +1,4 @@
-﻿// src/store/sortingStore.js
+// src/store/sortingStore.js
 import {create} from 'zustand';
 import {sortingService} from '../service';
 import {log} from '../utils';
@@ -50,6 +50,7 @@ const useSortingStore = create((set, get) => ({
 
   // Data proses sorting aktif
   nopick: null,               // nomor pick yang sedang diproses
+  scanMethod: 'scan',         // metode scan: 'scan' | 'count'
   sortingData: null,          // { header, details[] } — dari backend 2
 
   // Loading states
@@ -564,6 +565,7 @@ const useSortingStore = create((set, get) => ({
     }),
 
   resetError: () => set({error: null}),
+  setScanMethod: (method) => set({ scanMethod: method }),
 }));
 
 export default useSortingStore;
